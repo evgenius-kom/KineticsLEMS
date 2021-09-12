@@ -1,0 +1,11 @@
+{
+	"Version": "0.0.0",
+	"Settings": [
+		{ 
+			"name": "PathToArchive", 
+            "type": "string",
+			"value": "",
+            "comment": "Full path to the archive with .txt files with the experimental results."
+		}
+	]
+}
