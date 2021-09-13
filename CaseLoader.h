@@ -4,10 +4,11 @@
 #include <memory>
 
 /*
-    1. Read the archive
-    2. Read .txt files inside the archive
-    3. Make waves from these .txt files
-    4. Parse case settings.json file -> fill CaseData
+    1. Read the archive +
+    2. Unzip files +
+    3. Read .txt files inside the archive +
+    4. Make waves from these .txt files
+    5. Parse case settings.json file -> fill CaseData
 */
 
 class CaseLoader

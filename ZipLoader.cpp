@@ -2,13 +2,14 @@
 #include "WaveReader.h"
 #include <stdexcept>
 #include <iostream>
+#include <fstream>
 
 
 ZipLoader::ZipLoader( const std::string& pathToArchive ) : 
-    path_( pathToArchive ) 
+    pathToZip_( pathToArchive ) 
 {
-    if ( !std::filesystem::exists( path_ ) || 
-         path_.extension() != ".zip" )
+    if ( !std::filesystem::exists( pathToZip_ ) || 
+         pathToZip_.extension() != ".zip" )
     {
         throw "Incorrect path to archive";
     }
@@ -20,36 +21,51 @@ ZipLoader::ZipLoader( const std::string& pathToArchive ) :
         throw std::invalid_argument( "Invalid archive" );
     }
 
-    const int filesNum = zip_get_num_files( zipFile_ );
-    if ( filesNum == 0 )
+    if ( zip_get_num_files( zipFile_ ) == 0 )
     {
         throw std::invalid_argument( "Empty archive" );
     }
-
-    // TODO: make unzip
-
-/*    for ( int i = 0; i < filesNum; ++i ) {
-        struct zip_stat file_info;
-        zip_stat_init( &file_info );
-        zip_stat_index( zipFile_, i, 0, &file_info );
-
-        const std::string& fileName = file_info.name;
-        // std::cout << fileName << std::endl;
-    };*/
 }
 
 ZipLoader::~ZipLoader()
 {
     zip_close( zipFile_ );
-    // TODO: delete unzipped folder
 }
 
-zip* ZipLoader::getZipFile() const
+std::filesystem::path ZipLoader::unarchive() const
 {
-    return zipFile_;
-}
+    const std::filesystem::path& pathToFolder = pathToZip_.parent_path() / pathToZip_.stem();
+    if ( std::filesystem::exists( pathToFolder ) )
+    {
+        std::filesystem::remove_all( pathToFolder );
+    }
 
-bool ZipLoader::loadWaves()
-{
-    return true;
+    std::filesystem::create_directory( pathToFolder );
+
+    const int filesNum = zip_get_num_files( zipFile_ );
+    for ( int i = 0; i < filesNum; ++i ) {
+        struct zip_stat fileInfo;
+        zip_stat_init( &fileInfo );
+        zip_stat_index( zipFile_, i, 0, &fileInfo );
+        std::cout << fileInfo.name << std::endl;
+
+        std::ofstream newFile( pathToFolder / fileInfo.name ); // TODO: create the File class
+
+        char* contents = new char[fileInfo.size];
+        struct zip_file* f = zip_fopen_index( zipFile_, i, 0 );
+        if ( f ) {
+            zip_fread( f, contents, fileInfo.size );
+            zip_fclose( f );
+        }
+
+        // std::cout << contents << std::endl;
+
+        newFile << contents;
+        delete[] contents;
+
+        // TODO: check the end of files
+        newFile.close();
+    };
+
+    return pathToFolder;
 }

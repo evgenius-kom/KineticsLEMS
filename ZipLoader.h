@@ -10,12 +10,10 @@ public:
 	explicit ZipLoader( const std::string& pathToArchive );
 	~ZipLoader() noexcept;
 
-    zip* getZipFile() const;
-
-	bool loadWaves();
+	std::filesystem::path unarchive() const;
 
 private:
-	const std::filesystem::path path_;
+	const std::filesystem::path pathToZip_;
 
     // TODO: make std::unique_ptr<zip>()
 	zip* zipFile_ = nullptr; // zip file descriptor
