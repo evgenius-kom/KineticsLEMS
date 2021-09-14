@@ -1,6 +1,6 @@
 #pragma once
-#include "CaseData.h"
 #include "ZipLoader.h"
+#include "CaseParamsParser.h"
 #include <memory>
 
 /*
@@ -14,10 +14,12 @@
 class CaseLoader
 {
 public:
-	CaseLoader( const std::string& pathToCase, CaseData& caseData );
+    CaseLoader( CaseData& caseData, const std::string& pathToArchive );
 
 private:
-	const std::unique_ptr<ZipLoader> zipLoader_;
-	CaseData& caseData_;
+    CaseData& caseData_;
+    const std::unique_ptr<const ZipLoader> zipLoader_;
+    const std::filesystem::path pathToFolder_;
+    const std::unique_ptr<CaseParamsParser> caseParamsParser_;
 
 };

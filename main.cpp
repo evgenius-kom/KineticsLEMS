@@ -16,7 +16,7 @@ int main( int argc, char* argv[] )
     try
     {
         CaseData caseData;
-        CaseLoader caseLoader( pathToArchive, caseData );
+        CaseLoader caseLoader( caseData, pathToArchive );
     }
     catch ( const char* e )
     {

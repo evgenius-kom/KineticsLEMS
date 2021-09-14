@@ -14,5 +14,6 @@ public:
 
 private:
 	std::vector<Point> points_;
+
 };
 

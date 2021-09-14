@@ -51,19 +51,16 @@ std::filesystem::path ZipLoader::unarchive() const
 
         std::ofstream newFile( pathToFolder / fileInfo.name ); // TODO: create the File class
 
-        char* contents = new char[fileInfo.size];
         struct zip_file* f = zip_fopen_index( zipFile_, i, 0 );
         if ( f ) {
+            char* contents = new char[fileInfo.size];
             zip_fread( f, contents, fileInfo.size );
             zip_fclose( f );
+            newFile << contents;
+            // TODO: check the end of files
+            delete[] contents;
         }
 
-        // std::cout << contents << std::endl;
-
-        newFile << contents;
-        delete[] contents;
-
-        // TODO: check the end of files
         newFile.close();
     };
 
