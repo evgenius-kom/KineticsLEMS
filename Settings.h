@@ -7,7 +7,6 @@ class Settings
 {
 public:
 	explicit Settings( const std::filesystem::path& path );
-	Settings( const Settings& settings );
 
 	nlohmann::json getJson() const;
 

@@ -17,11 +17,6 @@ Settings::Settings( const std::filesystem::path& path )
 	}
 }
 
-Settings::Settings( const Settings& settings ) :
-	json_( settings.getJson() )
-{
-}
-
 nlohmann::json Settings::getJson() const
 {
 	return json_;

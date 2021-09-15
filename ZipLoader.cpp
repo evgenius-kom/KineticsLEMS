@@ -1,5 +1,5 @@
 #include "ZipLoader.h"
-#include "WaveReader.h"
+#include "Paths.h"
 #include <stdexcept>
 #include <iostream>
 #include <fstream>
@@ -9,7 +9,7 @@ ZipLoader::ZipLoader( const std::string& pathToArchive ) :
     pathToZip_( pathToArchive ) 
 {
     if ( !std::filesystem::exists( pathToZip_ ) || 
-         pathToZip_.extension() != ".zip" )
+         pathToZip_.extension() != ZIP_EXTENSION )
     {
         throw "Incorrect path to archive";
     }

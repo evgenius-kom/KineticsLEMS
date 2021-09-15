@@ -1,4 +1,5 @@
 #include "CaseParamsParser.h"
+#include <iostream>
 
 
 CaseParamsParser::CaseParamsParser( CaseParams& params, const nlohmann::json& json ) :
@@ -9,45 +10,53 @@ CaseParamsParser::CaseParamsParser( CaseParams& params, const nlohmann::json& js
 	{
 		throw "No " + SETTINGS_FIELD + " field in the settings file";
 	}
-}
 
-bool CaseParamsParser::parse() noexcept
-{
-	return getMaterial_() && getExpType_() && getMethod_() && getFileToConditionMap_();
-}
-
-bool CaseParamsParser::getMaterial_()
-{
-	if ( json_.contains( MATERIAL_FIELD ) )
+	if ( !json_[SETTINGS_FIELD].is_array() )
 	{
-		return true;	
+		throw SETTINGS_FIELD + " : is not an array";
 	}
-	return false;
 }
 
-bool CaseParamsParser::getExpType_()
+bool CaseParamsParser::parse()
 {
-	if ( json_.contains( EXP_TYPE_FIELD ) )
-	{
-		return true;	
-	}
-	return false;
-}
+	bool isMaterialFound    = false;
+	bool isExpTypeFound     = false; 
+	bool isMethodFound      = false;
+	bool areConditionsFound = false; 
 
-bool CaseParamsParser::getMethod_()
-{
-	if ( json_.contains( METHOD_FIELD ) )
+	for ( const auto& item : json_[SETTINGS_FIELD] )
 	{
-		return true;	
+		if ( item["name"] == MATERIAL_FIELD )
+		{
+			params_.material = item["value"];
+			isMaterialFound = true;
+		}
+		else if ( item["name"] == EXP_TYPE_FIELD )
+		{
+			if      ( item["value"] == "isothermal" ) { params_.expType = ExpType::ISOTHERMAL; }
+			else if ( item["value"] == "heating" )    { params_.expType = ExpType::HEATING; }
+			else if ( item["value"] == "cooling" )    { params_.expType = ExpType::COOLING; }
+			else { std::cout << "Invalid experiment type found\n"; return false; }
+			isExpTypeFound = true;
+		}
+		else if ( item["name"] == METHOD_FIELD )
+		{
+			if      ( item["value"] == "DSC" )  { params_.method = Method::DSC; }
+			else if ( item["value"] == "TGA" )  { params_.method = Method::TGA; }
+			else if ( item["value"] == "UFSC" ) { params_.method = Method::UFSC; }
+			else if ( item["value"] == "POM" )  { params_.method = Method::POM; }
+			else { std::cout << "Invalid method found\n"; return false; }
+			isMethodFound = true;
+		}
+		else if ( item["name"] == CONDITIONS_FIELD )
+		{
+			// TODO: parse
+			areConditionsFound = true;
+		}
+		else
+		{
+			std::cout << "Invalid case setting type found\n";
+		}
 	}
-	return false;
-}
-
-bool CaseParamsParser::getFileToConditionMap_()
-{
-	if ( json_.contains( CONDITIONS_FIELD ) )
-	{
-		return true;	
-	}
-	return false;
+	return isMaterialFound && isExpTypeFound && isMethodFound && areConditionsFound;
 }

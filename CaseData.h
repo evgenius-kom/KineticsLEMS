@@ -4,17 +4,18 @@
 #include <map>
 
 
-static const std::string VERSION_FIELD    = "Version";
-static const std::string SETTINGS_FIELD   = "Settings";
+static const std::string VERSION_FIELD  = "Version";
+static const std::string SETTINGS_FIELD = "Settings";
 
 // fields in the app_settings.json file
-static const std::string CASE_PATH_FIELD  = "PathToArchive";
+static const std::string CASE_PATH_FIELD = "PathToArchive";
 
 // fields in the case settings.json file
 static const std::string MATERIAL_FIELD   = "Material";
 static const std::string EXP_TYPE_FIELD   = "ExperimentType";
 static const std::string METHOD_FIELD     = "Method";
 static const std::string CONDITIONS_FIELD = "Conditions";
+
 
 enum class X
 {
@@ -31,9 +32,9 @@ enum class Y
 
 enum class ExpType
 {
-	ISO,
-	NON_ISO_HEAT,
-	NON_ISO_COOL,
+	ISOTHERMAL,
+	HEATING,
+	COOLING,
 	INVALID
 };
 

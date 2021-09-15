@@ -16,7 +16,10 @@ int main( int argc, char* argv[] )
     try
     {
         CaseData caseData;
-        CaseLoader caseLoader( caseData, pathToArchive );
+        if ( !CaseLoader( caseData, pathToArchive ).load() )
+        {
+            std::cerr << "BAD CASE" << std::endl;
+        }
     }
     catch ( const char* e )
     {

@@ -6,15 +6,20 @@
 
 CaseLoader::CaseLoader( CaseData& caseData, const std::string& pathToArchive ) :
 	caseData_( caseData ),
-	zipLoader_( std::make_unique<ZipLoader>( pathToArchive ) ),
-	pathToFolder_( zipLoader_->unarchive() ),
-	caseParamsParser_( std::make_unique<CaseParamsParser>( caseData.params, 
-														   Settings( pathToFolder_ / CASE_SETTINGS_FILE ).getJson() ) )
+	zipLoader_( std::make_unique<ZipLoader>( pathToArchive ) )
 {
-	if ( !caseParamsParser_->parse() )
+}
+
+bool CaseLoader::load()
+{
+	const std::filesystem::path& pathToFolder = zipLoader_->unarchive();
+
+	const Settings settings( pathToFolder / CASE_SETTINGS_FILE );
+	if ( !CaseParamsParser( caseData_.params, settings.getJson() ).parse() )
 	{
-		throw std::invalid_argument( "Invalid case settings file" );
+		return false;
 	}
 
 	// TODO: read waves
+	return true;
 }

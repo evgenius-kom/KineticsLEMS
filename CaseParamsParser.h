@@ -8,15 +8,10 @@ class CaseParamsParser
 public:
 	CaseParamsParser( CaseParams& params, const nlohmann::json& json );
 
-	bool parse() noexcept;
+	bool parse();
 
 private:
 	CaseParams& params_;
-	const nlohmann::json& json_;	
-
-    bool getMaterial_();
-    bool getExpType_();
-    bool getMethod_();
-    bool getFileToConditionMap_();
+	const nlohmann::json& json_;
 
 };
