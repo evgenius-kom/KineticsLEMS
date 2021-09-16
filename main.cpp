@@ -20,6 +20,15 @@ int main( int argc, char* argv[] )
         {
             std::cerr << "BAD CASE" << std::endl;
         }
+
+        for ( const auto& [value, wave] : caseData.waves )
+        {
+            std::cout << "Wave values for a heating rate: " << value << " C/min :\n";
+            for ( const Point& point : wave.points() )
+            {
+                std::cout << "x = " << point.x << " -> y = " << point.y << std::endl;
+            }
+        }
     }
     catch ( const char* e )
     {

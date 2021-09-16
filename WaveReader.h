@@ -1,15 +1,18 @@
 #pragma once
-
 #include "Wave.h"
-#include <string>
+#include <filesystem>
 
 
 class WaveReader
 {
 public:
-	explicit WaveReader( const std::string& fileName );
+	explicit WaveReader( const std::filesystem::path& pathToFile );
+
+	bool read();
+	Wave getWave() const { return wave_; };
 
 private:
-	const std::string fileName_;
+	const std::filesystem::path pathToFile_;
+	Wave wave_;
 
 };

@@ -1,4 +1,5 @@
 #include "CaseLoader.h"
+#include "WaveReader.h"
 #include "Settings.h"
 #include "Paths.h"
 #include <iostream>
@@ -20,6 +21,14 @@ bool CaseLoader::load()
 		return false;
 	}
 
-	// TODO: read waves
+	for ( const auto& [fileName, value] : caseData_.params.fileToConditionMap )
+	{
+		WaveReader waveReader( pathToFolder / fileName );
+		if ( waveReader.read() )
+		{
+			caseData_.waves.emplace( value, waveReader.getWave() );
+		}
+	}
+
 	return true;
 }

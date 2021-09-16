@@ -1,17 +1,41 @@
 #include "WaveReader.h"
+#include <filesystem>
+#include <stdexcept>
+#include <sstream>
+#include <iostream>
+#include <fstream>
 
 
-WaveReader::WaveReader( const std::string& fileName ) :
-	fileName_( fileName )
+WaveReader::WaveReader( const std::filesystem::path& pathToFile ) :
+	pathToFile_( pathToFile )
 {
-    //Alloc memory for its uncompressed contents
-/*    char *contents = new char[st.size];
+    if ( !std::filesystem::exists( pathToFile_ ) )
+    {
+        throw std::invalid_argument( "Invalid file " + pathToFile_.u8string() );
+    }
+}
 
-    //Read the compressed file
-    zip_file* f = zip_fopen( z, fileName_, 0 );
-    zip_fread( f, contents, st.size );
-    zip_fclose( f );
+bool WaveReader::read()
+{
+    std::ifstream file;
+    file.open( pathToFile_ );
+    if ( !file.good() )
+    {
+        return false;
+    }
 
-    std::cout << contents << std::endl;
-    delete[] contents;
-*/}
+    std::string line;
+    while ( std::getline( file, line ) )
+    {
+        std::istringstream iss( line );
+        float x, y;
+        if ( !( iss >> x >> y ) )
+        {
+            break;
+        }
+
+        Point point { x, y };
+        wave_.addPoint( point );
+    }
+    return !wave_.empty();
+}
