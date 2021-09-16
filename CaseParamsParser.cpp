@@ -41,16 +41,21 @@ bool CaseParamsParser::parse()
 		}
 		else if ( item["name"] == METHOD_FIELD )
 		{
-			if      ( item["value"] == "DSC" )  { params_.method = Method::DSC; }
-			else if ( item["value"] == "TGA" )  { params_.method = Method::TGA; }
-			else if ( item["value"] == "UFSC" ) { params_.method = Method::UFSC; }
-			else if ( item["value"] == "POM" )  { params_.method = Method::POM; }
+			if      ( item["value"] == "DSC" ) { params_.method = Method::DSC; }
+			else if ( item["value"] == "TGA" ) { params_.method = Method::TGA; }
+			else if ( item["value"] == "FSC" ) { params_.method = Method::FSC; }
+			else if ( item["value"] == "POM" ) { params_.method = Method::POM; }
 			else { std::cout << "Invalid method found\n"; return false; }
 			isMethodFound = true;
 		}
 		else if ( item["name"] == CONDITIONS_FIELD )
 		{
-			// TODO: parse
+			// value -> rate or temperature
+			for ( const auto& [fileName, value] : item["value"].items() )
+			{
+				// TODO: do extra values check
+				params_.fileToConditionMap[fileName] = ::atof( std::string( value ).c_str() );
+			}
 			areConditionsFound = true;
 		}
 		else

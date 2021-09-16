@@ -42,7 +42,7 @@ enum class Method
 {
 	DSC,    // differential scanning calorimetry
 	TGA,    // thermogravimetry
-	UFSC,   // ultrafast scanning calorimetry on a chip, or nanocalorimetry
+	FSC,    // fast scanning calorimetry on a chip, or nanocalorimetry
 	POM,    // polarized optical microscopy
 	INVALID
 };
