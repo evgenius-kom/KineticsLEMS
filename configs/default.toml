@@ -1,0 +1,30 @@
+# KineticsLEMS — algorithm parameters.
+# Case description (material, method, file→rate map) lives in settings.json
+# inside the case folder/zip. This file controls the analysis itself.
+
+[conversion]
+# α grid used by isoconversional methods. step is exclusive of 0 and 1.
+step = 0.05
+min  = 0.05
+max  = 0.95
+
+[methods]
+# Which methods to run. Order is preserved in plots and CSV output.
+enabled = ["friedman", "kas", "ofw", "kissinger", "vyazovkin", "vyazovkin_aic"]
+
+[methods.vyazovkin]
+# Activation-energy search bracket (kJ/mol) for the 1D minimization of Φ(E).
+ea_bracket_kJ = [1.0, 600.0]
+
+[methods.vyazovkin_aic]
+# Half-width of the α-window used for numerical integration of J(E).
+# Must satisfy 0 < delta_alpha < min(α_min, 1 − α_max).
+delta_alpha   = 0.02
+ea_bracket_kJ = [1.0, 600.0]
+
+[output]
+# Where results are written when running the CLI. Created if missing.
+directory  = "out"
+save_plots = true
+save_csv   = true
+plot_dpi   = 120

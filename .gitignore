@@ -1,32 +1,30 @@
-# Prerequisites
-*.d
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# Build artifacts
+build/
+dist/
 
-# Precompiled Headers
-*.gch
-*.pch
+# Local analysis runs
+out/
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# Local-only reference materials (papers, xlsm, docx)
+theory/
 
-# Fortran module files
-*.mod
-*.smod
+# Generated synthetic cases
+examples/
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
+# OS
+.DS_Store
 
-# Executables
-*.exe
-*.out
-*.app
+# IDE — keep .vscode/settings.json (interpreter pinning) but ignore the rest
+.idea/
+.vscode/*
+!.vscode/settings.json
