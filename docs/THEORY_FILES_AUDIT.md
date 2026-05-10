@@ -11,21 +11,20 @@ Verdict per file (relative to current code + [docs/ALGORITHMS.md](ALGORITHMS.md)
 
 These are safe to delete from `theory/`.
 
-## XLSX / XLSM — safe to delete (data already migrated)
+## XLSX / XLSM — safe to delete
 
 | File                                        | What's in it                                                                    | Captured? |
 |---------------------------------------------|---------------------------------------------------------------------------------|-----------|
 | `Вязовкин.xlsx`                             | ABPOT and DAPOT α(T) tables + per-α reference E_a column (independent Vyazovkin computation) | ✅ Migrated to [`tests/fixtures/abpot/`](../tests/fixtures/abpot/) and [`tests/fixtures/dapot/`](../tests/fixtures/dapot/); regression-tested by [`tests/test_reference_abpot_dapot.py`](../tests/test_reference_abpot_dapot.py) |
-| `для расчета по Вязовкину.xlsm`             | Macro-driven workbook for the same kind of Vyazovkin computation                | ❌ Not migrated — same kind of content as `Вязовкин.xlsx`, considered superseded by it. |
-| `Сводная таблица.xlsx`                      | Per-experiment DSC summary (mass, β, peak T, integrals, polymerization peak) for ABPOT / DAPOT                  | ❌ Not migrated — experimental log, not numerical reference. Re-extractable from raw lab notebooks if ever needed. |
-| `Zalfa plots Pr-Tm program.xlsm`            | Macro-driven α-vs-T plotter for Pr–Tm (separate material)                       | ❌ Not migrated — only useful if you actively work on Pr–Tm; out of current scope. |
+| `для расчета по Вязовкину.xlsm`             | Macro-driven workbook with multi-rate Vyazovkin computations: 3-rate / 4-rate ABPOT and DAPOT, plus prepreg-СКМ (6 rates)  | ✅ The 4th DAPOT rate (β = 1 K/min) extracted to [`tests/fixtures/dapot/rate_1.0.tsv`](../tests/fixtures/dapot/rate_1.0.tsv). СКМ noted in [`docs/TODO_FEATURES.md`](TODO_FEATURES.md#other-extra-data) — recoverable on demand. |
+| `Сводная таблица.xlsx`                      | DSC experiment log + Z(α)-master-plot computations (sheet "Z-plots") + per-α A calculation (sheet "A calculated") + reaction-order check (sheet "Проверка порядка") | ✅ Three derived analyses captured as concrete feature specs with formulas in [`docs/TODO_FEATURES.md`](TODO_FEATURES.md). Experimental log is not used by the codebase. |
+| `Zalfa plots Pr-Tm program.xlsm`            | Pr–Tm material's single-rate Z(α) computation                                   | ✅ Z(α) formula captured in [`docs/TODO_FEATURES.md`](TODO_FEATURES.md#1-criadomalek-master-plot--zα). Pr–Tm-specific data noted as recoverable on demand. |
 
-**Recommendation.** Safe to delete. The numerically-relevant content from
-`Вязовкин.xlsx` (ABPOT + DAPOT reference Eₐ) is now under
-[`tests/fixtures/`](../tests/fixtures/) and is exercised by the regression
-test on every `pytest` run. The other three workbooks contain
-experimental-log data or material-specific analyses that are not used by
-the codebase; keep them only if you personally need them as an archive.
+**Recommendation.** Safe to delete all four. Everything algorithmically
+relevant (formulas, reference numbers) is captured in the codebase or
+under `docs/`. The remaining experimental-log content was never used by
+the codebase and can be reconstructed from primary lab notebooks if ever
+needed.
 
 ## Other files in `theory/` (PDFs and pptx)
 
