@@ -1,19 +1,26 @@
-# TODO — features captured from Excel workbooks (not yet implemented)
+# Features captured from Excel workbooks
 
-These three feature ideas were extracted from `theory/Сводная таблица.xlsx`
-and `theory/Zalfa plots Pr-Tm program.xlsm`. The Excel files themselves
-can be deleted: the formulas, algorithm sketches, and references below are
-sufficient to implement them later. None of these is implemented today —
-this file is the spec to implement them when needed.
+These three features were extracted from `theory/Сводная таблица.xlsx`
+and `theory/Zalfa plots Pr-Tm program.xlsm`. All three are now implemented.
+The Excel files themselves can be deleted: the formulas, algorithm sketches,
+and references below preserve the full context.
 
 Cross-reference: [docs/ROADMAP_PROMPT.md](ROADMAP_PROMPT.md) section 3
 covers model-based features more broadly. The three items here are the
-specific Excel-derived ones that have a known formula and a clear
-input/output already.
+specific Excel-derived ones that had a known formula and clear
+input/output.
 
 ---
 
-## 1. Criado–Málek master plot — Z(α)
+## 1. Criado–Málek master plot — Z(α) ✓ IMPLEMENTED
+
+**Module:** [`src/kinetics_lems/methods/master_plot.py`](../src/kinetics_lems/methods/master_plot.py)
+**Reporter:** [`src/kinetics_lems/reporting_master_plot.py`](../src/kinetics_lems/reporting_master_plot.py)
+**Tests:** [`tests/test_master_plot.py`](../tests/test_master_plot.py)
+
+Original spec (preserved for reference):
+
+## 1-spec. Criado–Málek master plot — Z(α)
 
 **Goal.** Identify the reaction-model function f(α) by comparing the
 experimental Z(α) curve against the master Z(α) curves of standard
@@ -62,7 +69,19 @@ which is the same thing rewritten with separate dα/dt and T² normalizers.
 
 ---
 
-## 2. Pre-exponential A from per-α E_a (assuming f(α) = 1 − α)
+## 2. Pre-exponential A from per-α E_a ✓ IMPLEMENTED
+
+**Module:** [`src/kinetics_lems/methods/preexponential.py`](../src/kinetics_lems/methods/preexponential.py)
+**Reporter:** [`src/kinetics_lems/reporting_preexp.py`](../src/kinetics_lems/reporting_preexp.py)
+**Tests:** [`tests/test_preexponential.py`](../tests/test_preexponential.py)
+
+Note: f(α) is no longer hard-coded to F1 — the runner auto-picks the
+best model from the master-plot ranking, or any model can be specified
+explicitly in the config (`[methods.preexponential] model = "F2"`).
+
+Original spec (preserved for reference):
+
+## 2-spec. Pre-exponential A from per-α E_a (assuming f(α) = 1 − α)
 
 **Goal.** Once Vyazovkin gives E_a(α), recover A under a chosen reaction
 model, then average across α and rates.
@@ -88,7 +107,14 @@ master-plot output above before quoting a number.
 
 ---
 
-## 3. Reaction-order n via linearization
+## 3. Reaction-order n via linearization — NOT YET IMPLEMENTED
+
+This item was not implemented. The master-plot Z(α) ranking (item 1)
+already discriminates between model families (F_n, A_m, R_n, D_n), which
+is more general than sweeping n over a grid. If a strict n-order fit is
+needed, here is the original spec:
+
+## 3-spec. Reaction-order n via linearization
 
 **Goal.** Find n in f(α) = (1 − α)ⁿ by trying several values and picking
 the one that gives the straightest plot.

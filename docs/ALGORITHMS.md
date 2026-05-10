@@ -216,18 +216,119 @@ Implementation: [`methods/vyazovkin.py::vyazovkin_aic`](../src/kinetics_lems/met
 
 ---
 
-## H. Reaction-model identification (informational)
+## H. Criado–Málek master plot — Z(α) model discrimination
 
-Once E(α) is stable, the differential method (Friedman) gives intercepts
-ln{A · f(α)}. Plotting these intercepts vs ln(1 − α):
+**Goal.** Identify f(α) by comparing the experimental Z(α) curve to the
+theoretical master curves of 12 standard models.
 
-- For an n-th-order model F_n with f(α) = (1 − α)ⁿ:
-  intercept = ln A + n · ln(1 − α). Slope of intercept vs ln(1 − α) gives n.
-- For Avrami (A_m, f(α) = m(1 − α)[-ln(1 − α)]^{1−1/m}) and other models, see
-  the master plot method in ICTAC 2011 §5.
+**Definition.**
 
-Not implemented in this code base. Marked as a TODO so it can be added once
-demand justifies it.
+    Z(α) = (dα/dt) · T²                                               (13)
+
+This is proportional to f(α)·g(α) up to constants that cancel after
+normalization. After dividing by Z at α = 0.5:
+
+    Z_norm(α) = Z(α) / Z(0.5) = f(α)·g(α) / [f(0.5)·g(0.5)]         (14)
+
+Every master curve and the experimental curve equal 1 at α = 0.5, making
+them directly comparable without knowing A, E_a, or β.
+
+**12-model standard set** (Málek 1992 / ICTAC 2011 §5):
+
+| Model | f(α)                                       | g(α)                          |
+|-------|--------------------------------------------|-------------------------------|
+| F1    | (1 − α)                                    | −ln(1 − α)                    |
+| F2    | (1 − α)²                                   | 1/(1 − α) − 1                 |
+| F3    | (1 − α)³                                   | ½[1/(1 − α)² − 1]             |
+| A2    | 2(1 − α)[−ln(1 − α)]^(1/2)                 | [−ln(1 − α)]^(1/2)            |
+| A3    | 3(1 − α)[−ln(1 − α)]^(2/3)                 | [−ln(1 − α)]^(1/3)            |
+| A4    | 4(1 − α)[−ln(1 − α)]^(3/4)                 | [−ln(1 − α)]^(1/4)            |
+| R2    | 2(1 − α)^(1/2)                             | 1 − (1 − α)^(1/2)             |
+| R3    | 3(1 − α)^(2/3)                             | 1 − (1 − α)^(1/3)             |
+| D1    | 1/(2α)                                     | α²                            |
+| D2    | [−ln(1 − α)]⁻¹                             | (1−α)ln(1−α) + α              |
+| D3    | 3(1−α)^(2/3) / (2[1−(1−α)^(1/3)])          | [1−(1−α)^(1/3)]²              |
+| D4    | 3 / (2[(1−α)^(−1/3) − 1])                  | 1 − ⅔α − (1−α)^(2/3)         |
+
+**Algorithm.**
+
+1. For each run k, evaluate Z_k(α) = (dα/dt)_α · T_α² at every α in the grid.
+2. Normalize: Z_k_norm(α) = Z_k(α) / Z_k(0.5).
+3. Average across runs: Z_exp(α) = mean_k Z_k_norm(α).
+4. Compute the 12 master curves and normalize each at α = 0.5.
+5. Rank by RMS distance: RMSD_m = sqrt(mean_α (Z_exp − Z_master_m)²).
+   Smaller RMSD → better fit.
+
+**Known degeneracy.** F1 and A_m (m = 2, 3, 4) have identical Z_norm
+shapes: Z = m·(1−α)·[−ln(1−α)] for A_m, which equals Z_F1 up to a
+constant prefactor that cancels after normalization. The Z-plot reliably
+separates model *families* (F_n vs R_n vs D_n vs A_m) but cannot
+distinguish F1 from A_m by itself. Combine with Friedman intercepts for
+that.
+
+Implementation: [`methods/master_plot.py`](../src/kinetics_lems/methods/master_plot.py).
+
+---
+
+## I. Pre-exponential A from kinetic triplet
+
+**Goal.** Given E_a(α) from Vyazovkin and a reaction model f(α), recover
+A(α) = A · f(α) / f(α) = A pointwise using the rate equation:
+
+    A(α, run) = (dα/dt)_{α,run} / [ f(α) · exp(−E_a(α) / (R · T_{α,run})) ] (15)
+
+**Algorithm.**
+
+1. For each α_k and each run, look up (dα/dt)_{α,k,run} and T_{α,k,run}.
+2. Compute ln A_raw = ln(dα/dt) − ln f(α) + E_a / (RT) pointwise.
+3. Take the median and MAD across all (α, run) pairs in log-space (robust
+   to outliers near α → 0 or 1 where dα/dt is noisy).
+4. Report: `A_median_per_sec` and `A_mad_per_sec` per α, plus the
+   grand median across all α.
+
+**f(α) selection.** By default, `model = ""` in the config makes the runner
+auto-pick the top-ranked model from the Z(α) master plot; falls back to F1
+if master_plot is disabled.
+
+**Caveat.** Equation (15) is exact only under the assumption that E_a(α)
+is a single-step quantity. If the reaction is multi-step (non-flat E(α)),
+A(α) absorbs the composition of A values and loses physical meaning.
+Use the multi-step result first.
+
+Implementation: [`methods/preexponential.py`](../src/kinetics_lems/methods/preexponential.py).
+
+---
+
+## J. Multi-step detection via E(α) segmentation
+
+**Goal.** Decide whether E(α) is flat enough to be single-step, and if
+not, identify the α boundaries of each quasi-constant segment.
+
+**Flatness score.**
+
+    flatness = (max E − min E) / median E                              (16)
+
+Thresholds (rule-of-thumb, ICTAC 2011 §6):
+- < 0.05 → effectively single-step;
+- 0.05–0.20 → mild multi-step;
+- > 0.20 → clear multi-step.
+
+**Algorithm (greedy segmentation).**
+
+1. Discard NaN points. Compute `median_E` over all valid α.
+2. Walk through α in order, extending the current segment while
+   `|E[i] − median(segment)| ≤ threshold · |median(segment)|`.
+   Start a new segment when the condition breaks.
+3. Merge any segment with fewer than `min_segment_size` points into
+   its neighbour (prevents single-outlier artefacts).
+4. For each segment, report: `alpha_lo`, `alpha_hi`, `Ea_median`,
+   `Ea_mad` (robust spread within the segment), `contribution`
+   (= alpha_hi − alpha_lo).
+
+**Recommended input.** Vyazovkin or Vyazovkin-AIC output (cleanest E(α)
+profile); Friedman tends to be noisier near the tails.
+
+Implementation: [`methods/multistep.py`](../src/kinetics_lems/methods/multistep.py).
 
 ---
 
@@ -242,8 +343,9 @@ demand justifies it.
   noiseless single-step data and to a few kJ/mol with 3 % noise; see
   [`tests/test_synthetic_recovery.py`](../tests/test_synthetic_recovery.py).
 - **Multi-step reactions.** A non-flat E(α) is the diagnostic: > 20 % variation
-  signals a multi-step process. Single-Ea methods (Kissinger, Coats–Redfern)
-  become misleading; report E(α) instead of a single number.
+  signals a multi-step process (§J gives a quantitative flatness score).
+  Single-E_a methods (Kissinger, Coats–Redfern) become misleading; report
+  E(α) instead. Use A only after confirming single-step character.
 
 ---
 
@@ -259,3 +361,6 @@ demand justifies it.
 - Vyazovkin, S. (2001). *J. Comput. Chem.* 22, 178 (advanced isoconversional).
 - ICTAC Kinetics Committee (2011). *Thermochim. Acta* 520, 1.
 - Senum, G. I.; Yang, R. T. (1977). *J. Therm. Anal.* 11, 445.
+- Criado, J. M. (1978). *Thermochim. Acta* 24, 186.
+- Criado, J. M. et al. (1989). *Thermochim. Acta* 147, 75.
+- Málek, J. (1992). *Thermochim. Acta* 200, 257.
