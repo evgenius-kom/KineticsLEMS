@@ -25,10 +25,25 @@ def _f_first_order(a: float) -> float:
     return max(1.0 - a, 0.0)
 
 
+def _f_avrami(m: float) -> Callable[[float], float]:
+    """Avrami f(α) for nucleation index m: m·(1−α)·[−ln(1−α)]^((m−1)/m)."""
+    exp = (m - 1.0) / m
+
+    def fn(a: float) -> float:
+        one_minus = max(1.0 - a, 1e-12)
+        log_term = max(-np.log(one_minus), 0.0)
+        return m * one_minus * (log_term**exp)
+
+    return fn
+
+
 REACTION_MODELS: dict[str, Callable[[float], float]] = {
     "F1": _f_first_order,                                # first-order: 1 − α
     "F2": lambda a: max(1.0 - a, 0.0) ** 2,              # second-order
-    "A2": lambda a: 2.0 * (1.0 - a) * np.sqrt(max(-np.log(max(1.0 - a, 1e-12)), 0.0)),  # Avrami n=2
+    "F3": lambda a: max(1.0 - a, 0.0) ** 3,              # third-order
+    "A2": _f_avrami(2.0),                                # Avrami n=2
+    "A3": _f_avrami(3.0),                                # Avrami n=3
+    "A4": _f_avrami(4.0),                                # Avrami n=4
     "R2": lambda a: 2.0 * np.sqrt(max(1.0 - a, 0.0)),    # contracting cylinder
     "R3": lambda a: 3.0 * (max(1.0 - a, 0.0)) ** (2.0 / 3.0),  # contracting sphere
 }
@@ -75,13 +90,18 @@ def generate_case(
     T_start_eff = float(T_start) if T_start is not None else auto_start
     T_stop_eff = float(T_stop) if T_stop is not None else auto_stop
 
+    # Avrami models have f(α = 0) = 0 — the reaction would never start
+    # without a small "nucleation seed". Use 1e-6 for any model whose f(0)
+    # is numerically zero.
+    seed_alpha = 0.0 if f(0.0) > 1e-12 else 1e-6
+
     waves: dict[float, Wave] = {}
     T_grid_template = np.linspace(T_start_eff, T_stop_eff, n_points)
     for beta_min in rates_K_per_min:
         beta_sec = beta_min / SEC_PER_MIN
         T_grid = T_grid_template.copy()
         # Integrate dα/dT = A/β · f(α) · exp(-E/(R·T)) by simple RK4 in T.
-        alpha = np.zeros_like(T_grid)
+        alpha = np.full_like(T_grid, seed_alpha)
         for k in range(1, T_grid.size):
             T0 = T_grid[k - 1]
             T1 = T_grid[k]

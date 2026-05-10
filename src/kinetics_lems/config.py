@@ -9,7 +9,17 @@ import numpy as np
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "configs" / "default.toml"
 
-ALL_METHODS = ("friedman", "kas", "ofw", "kissinger", "vyazovkin", "vyazovkin_aic")
+ALL_METHODS = (
+    "friedman",
+    "kas",
+    "ofw",
+    "kissinger",
+    "vyazovkin",
+    "vyazovkin_aic",
+    "master_plot",
+    "preexponential",
+    "multistep",
+)
 
 
 @dataclass(frozen=True)
@@ -48,11 +58,30 @@ class VyazovkinAICConfig:
 
 
 @dataclass(frozen=True)
+class PreexponentialConfig:
+    model: str | None = None
+    """f(α) model name (e.g. ``"F1"``). ``None`` → take best model from
+    Z(α) master-plot ranking; falls back to ``"F1"`` if master_plot disabled."""
+
+
+@dataclass(frozen=True)
+class MultiStepConfig:
+    jump_threshold: float = 0.10
+    """Relative |ΔE / median(E)| above which a new segment starts."""
+    min_segment_size: int = 3
+    """Smallest segment in α-points; smaller segments are merged."""
+
+
+@dataclass(frozen=True)
 class OutputConfig:
     directory: str = "out"
     save_plots: bool = True
     save_csv: bool = True
-    plot_dpi: int = 120
+    plot_dpi: int = 300
+    plot_formats: tuple[str, ...] = ("png", "pdf")
+    """Vector formats first (pdf/svg) for journals; png for screen previews."""
+    per_method_panels: bool = False
+    """If True, also write one figure per method in addition to the overlay."""
 
 
 @dataclass(frozen=True)
@@ -61,6 +90,8 @@ class Config:
     enabled_methods: tuple[str, ...] = ALL_METHODS
     vyazovkin: VyazovkinConfig = field(default_factory=VyazovkinConfig)
     vyazovkin_aic: VyazovkinAICConfig = field(default_factory=VyazovkinAICConfig)
+    preexponential: PreexponentialConfig = field(default_factory=PreexponentialConfig)
+    multistep: MultiStepConfig = field(default_factory=MultiStepConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
 
 
@@ -96,12 +127,27 @@ def _parse(raw: dict) -> Config:
         ea_bracket_kJ=_pair(aic_raw.get("ea_bracket_kJ", (1.0, 600.0))),
     )
 
+    preexp_raw = methods_raw.get("preexponential", {})
+    raw_model = preexp_raw.get("model")
+    preexp = PreexponentialConfig(
+        # Empty string from TOML → auto-pick from master_plot.
+        model=raw_model if raw_model else None,
+    )
+
+    multistep_raw = methods_raw.get("multistep", {})
+    multistep = MultiStepConfig(
+        jump_threshold=float(multistep_raw.get("jump_threshold", 0.10)),
+        min_segment_size=int(multistep_raw.get("min_segment_size", 3)),
+    )
+
     out_raw = raw.get("output", {})
     output = OutputConfig(
         directory=str(out_raw.get("directory", "out")),
         save_plots=bool(out_raw.get("save_plots", True)),
         save_csv=bool(out_raw.get("save_csv", True)),
-        plot_dpi=int(out_raw.get("plot_dpi", 120)),
+        plot_dpi=int(out_raw.get("plot_dpi", 300)),
+        plot_formats=tuple(out_raw.get("plot_formats", ("png", "pdf"))),
+        per_method_panels=bool(out_raw.get("per_method_panels", False)),
     )
 
     return Config(
@@ -109,6 +155,8 @@ def _parse(raw: dict) -> Config:
         enabled_methods=enabled,
         vyazovkin=vya,
         vyazovkin_aic=aic,
+        preexponential=preexp,
+        multistep=multistep,
         output=output,
     )
 
@@ -119,12 +167,14 @@ def _pair(value) -> tuple[float, float]:
 
 
 __all__ = [
+    "ALL_METHODS",
     "Config",
     "ConversionConfig",
-    "VyazovkinConfig",
-    "VyazovkinAICConfig",
-    "OutputConfig",
-    "ALL_METHODS",
     "DEFAULT_CONFIG_PATH",
+    "MultiStepConfig",
+    "OutputConfig",
+    "PreexponentialConfig",
+    "VyazovkinAICConfig",
+    "VyazovkinConfig",
     "load_config",
 ]

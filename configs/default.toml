@@ -9,8 +9,25 @@ min  = 0.05
 max  = 0.95
 
 [methods]
-# Which methods to run. Order is preserved in plots and CSV output.
-enabled = ["friedman", "kas", "ofw", "kissinger", "vyazovkin", "vyazovkin_aic"]
+# Which methods to run. Order matters: "preexponential" depends on
+# "vyazovkin" (or vyazovkin_aic / kas) and on "master_plot" (for f(α)).
+enabled = [
+    "friedman", "kas", "ofw", "kissinger",
+    "vyazovkin", "vyazovkin_aic",
+    "master_plot", "preexponential", "multistep",
+]
+
+[methods.preexponential]
+# f(α) model name (e.g. "F1", "F2", "A2", "R3"). Leave blank to auto-pick
+# the top-ranked model from master_plot. Falls back to "F1" if master_plot
+# is disabled.
+model = ""
+
+[methods.multistep]
+# Detect multi-step kinetics by segmenting E(α) where it shifts by more
+# than ``jump_threshold`` (relative). Min segment size in α-grid points.
+jump_threshold   = 0.10
+min_segment_size = 3
 
 [methods.vyazovkin]
 # Activation-energy search bracket (kJ/mol) for the 1D minimization of Φ(E).
@@ -24,7 +41,9 @@ ea_bracket_kJ = [1.0, 600.0]
 
 [output]
 # Where results are written when running the CLI. Created if missing.
-directory  = "out"
-save_plots = true
-save_csv   = true
-plot_dpi   = 120
+directory         = "out"
+save_plots        = true
+save_csv          = true
+plot_dpi          = 300                  # paper-grade by default
+plot_formats      = ["png", "pdf"]       # add "svg" for inline LaTeX/Web figures
+per_method_panels = false                # extra one-figure-per-method outputs

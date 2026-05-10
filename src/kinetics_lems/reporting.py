@@ -1,17 +1,22 @@
-"""Plot and CSV export helpers for analysis results."""
+"""CSV + plot exports for analysis results.
+
+Plot styling and multi-format saving live in :mod:`kinetics_lems.plotting`;
+this module orchestrates per-method CSVs and the standard set of figures
+(E_a vs α overlay, individual per-method panels, Kissinger fit).
+"""
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterable
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")  # safe default; CLI never opens a window
 import matplotlib.pyplot as plt
 import numpy as np
 
+from .plotting import DEFAULT_FORMATS, paper_style, save_figure
 from .runner import AnalysisResults
 
+# ---------- CSV ----------
 
 def write_csv(results: AnalysisResults, output_dir: Path) -> list[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -46,28 +51,73 @@ def write_csv(results: AnalysisResults, output_dir: Path) -> list[Path]:
     return written
 
 
-def plot_ea_vs_alpha(results: AnalysisResults, output_dir: Path, dpi: int = 120) -> Path | None:
-    """One overlay plot of E_a(α) for every isoconversional method."""
+# ---------- Plots ----------
+
+def plot_ea_vs_alpha(
+    results: AnalysisResults,
+    output_dir: Path,
+    *,
+    formats: Iterable[str] = DEFAULT_FORMATS,
+    dpi: int = 300,
+) -> Path | None:
+    """Single overlay figure of E_a(α) for every isoconversional method."""
     if not results.isoconversional:
         return None
     output_dir.mkdir(parents=True, exist_ok=True)
-    fig, ax = plt.subplots(figsize=(8, 5), dpi=dpi)
-    for name, res in results.isoconversional.items():
-        valid = ~np.isnan(res.Ea_kJ_per_mol)
-        ax.plot(res.alpha[valid], res.Ea_kJ_per_mol[valid], marker="o", label=name)
-    ax.set_xlabel("Conversion α")
-    ax.set_ylabel("Activation energy, kJ/mol")
-    ax.set_title("Isoconversional E_a(α)")
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-    path = output_dir / "Ea_vs_alpha.png"
-    fig.tight_layout()
-    fig.savefig(path)
-    plt.close(fig)
-    return path
+    with paper_style(dpi=dpi):
+        fig, ax = plt.subplots(figsize=(6.0, 4.0))
+        for name, res in results.isoconversional.items():
+            valid = ~np.isnan(res.Ea_kJ_per_mol)
+            ax.plot(
+                res.alpha[valid],
+                res.Ea_kJ_per_mol[valid],
+                marker="o",
+                markersize=4,
+                label=name,
+            )
+        ax.set_xlabel(r"Conversion, $\alpha$")
+        ax.set_ylabel(r"Activation energy, $E_{\mathrm{a}}$ (kJ/mol)")
+        ax.set_xlim(0.0, 1.0)
+        ax.legend(frameon=False, loc="best")
+        fig.tight_layout()
+        paths = save_figure(fig, output_dir / "Ea_vs_alpha", formats=formats)
+        return paths[0] if paths else None
 
 
-def plot_kissinger(results: AnalysisResults, output_dir: Path, dpi: int = 120) -> Path | None:
+def plot_ea_per_method(
+    results: AnalysisResults,
+    output_dir: Path,
+    *,
+    formats: Iterable[str] = DEFAULT_FORMATS,
+    dpi: int = 300,
+) -> list[Path]:
+    """One figure per isoconversional method (cleaner for journal figures)."""
+    if not results.isoconversional:
+        return []
+    output_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    with paper_style(dpi=dpi):
+        for name, res in results.isoconversional.items():
+            fig, ax = plt.subplots(figsize=(5.0, 3.5))
+            valid = ~np.isnan(res.Ea_kJ_per_mol)
+            ax.plot(res.alpha[valid], res.Ea_kJ_per_mol[valid], marker="o", markersize=4)
+            ax.set_xlabel(r"Conversion, $\alpha$")
+            ax.set_ylabel(r"$E_{\mathrm{a}}$ (kJ/mol)")
+            ax.set_title(name)
+            ax.set_xlim(0.0, 1.0)
+            fig.tight_layout()
+            written.extend(save_figure(fig, output_dir / f"Ea_{name}", formats=formats))
+    return written
+
+
+def plot_kissinger(
+    results: AnalysisResults,
+    output_dir: Path,
+    *,
+    formats: Iterable[str] = DEFAULT_FORMATS,
+    dpi: int = 300,
+) -> Path | None:
+    """Kissinger linearization plot ln(β/T_p²) vs 1/T_p."""
     if results.kissinger is None:
         return None
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -77,20 +127,24 @@ def plot_kissinger(results: AnalysisResults, output_dir: Path, dpi: int = 120) -
     x = 1.0 / Tp
     y = np.log(betas_per_sec / Tp**2)
     slope, intercept = np.polyfit(x, y, 1)
-    fig, ax = plt.subplots(figsize=(7, 5), dpi=dpi)
-    ax.plot(x, y, "o", label="data")
-    xs = np.linspace(x.min(), x.max(), 100)
-    ax.plot(xs, slope * xs + intercept, "-", label=f"fit, R²={kiss.r_squared:.4f}")
-    ax.set_xlabel("1 / T_p, 1/K")
-    ax.set_ylabel("ln(β / T_p²)")
-    ax.set_title(f"Kissinger: E_a = {kiss.Ea_kJ_per_mol:.2f} kJ/mol")
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-    path = output_dir / "kissinger.png"
-    fig.tight_layout()
-    fig.savefig(path)
-    plt.close(fig)
-    return path
+
+    with paper_style(dpi=dpi):
+        fig, ax = plt.subplots(figsize=(5.0, 4.0))
+        ax.plot(x, y, "o", markersize=6, label="experimental")
+        xs = np.linspace(x.min(), x.max(), 100)
+        ax.plot(xs, slope * xs + intercept, "-", label=f"linear fit ($R^2$={kiss.r_squared:.4f})")
+        ax.set_xlabel(r"$1 / T_{\mathrm{p}}$ (K$^{-1}$)")
+        ax.set_ylabel(r"$\ln(\beta / T_{\mathrm{p}}^{2})$")
+        ax.set_title(f"Kissinger: $E_{{\\mathrm{{a}}}}$ = {kiss.Ea_kJ_per_mol:.1f} kJ/mol")
+        ax.legend(frameon=False, loc="best")
+        fig.tight_layout()
+        paths = save_figure(fig, output_dir / "kissinger", formats=formats)
+        return paths[0] if paths else None
 
 
-__all__ = ["write_csv", "plot_ea_vs_alpha", "plot_kissinger"]
+__all__ = [
+    "plot_ea_per_method",
+    "plot_ea_vs_alpha",
+    "plot_kissinger",
+    "write_csv",
+]

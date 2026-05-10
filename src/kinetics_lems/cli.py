@@ -9,7 +9,10 @@ import numpy as np
 
 from .config import DEFAULT_CONFIG_PATH, load_config
 from .io import load_case
-from .reporting import plot_ea_vs_alpha, plot_kissinger, write_csv
+from .reporting import plot_ea_per_method, plot_ea_vs_alpha, plot_kissinger, write_csv
+from .reporting_master_plot import plot_master_plot, write_master_plot_csv
+from .reporting_multistep import plot_multistep, write_multistep_csv
+from .reporting_preexp import plot_preexp, write_preexp_csv
 from .runner import run_analysis
 from .synthetic import generate_case, write_case
 
@@ -73,9 +76,33 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
 
     if config.output.save_csv:
         write_csv(results, out_dir)
+        if results.model_ranking is not None:
+            write_master_plot_csv(results.model_ranking, out_dir)
+        if results.preexponential is not None:
+            write_preexp_csv(results.preexponential, out_dir)
+        if results.multistep is not None:
+            write_multistep_csv(results.multistep, out_dir)
     if config.output.save_plots:
-        plot_ea_vs_alpha(results, out_dir, dpi=config.output.plot_dpi)
-        plot_kissinger(results, out_dir, dpi=config.output.plot_dpi)
+        plot_kwargs = {
+            "dpi": config.output.plot_dpi,
+            "formats": config.output.plot_formats,
+        }
+        plot_ea_vs_alpha(results, out_dir, **plot_kwargs)
+        plot_kissinger(results, out_dir, **plot_kwargs)
+        if results.model_ranking is not None:
+            plot_master_plot(results.model_ranking, out_dir, **plot_kwargs)
+        if results.preexponential is not None:
+            plot_preexp(results.preexponential, out_dir, **plot_kwargs)
+        if results.multistep is not None:
+            ms_iso = (
+                results.isoconversional.get("vyazovkin")
+                or results.isoconversional.get("vyazovkin_aic")
+                or results.isoconversional.get("kas")
+            )
+            if ms_iso is not None:
+                plot_multistep(ms_iso, results.multistep, out_dir, **plot_kwargs)
+        if config.output.per_method_panels:
+            plot_ea_per_method(results, out_dir, **plot_kwargs)
 
     print(f"Material: {case.params.material}")
     print(f"Method:   {case.params.method.value}")
@@ -88,6 +115,29 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
             f"  kissinger      E_a = {results.kissinger.Ea_kJ_per_mol:7.2f} kJ/mol "
             f"(R²={results.kissinger.r_squared:.4f})"
         )
+    if results.model_ranking is not None:
+        ranked = results.model_ranking.ranked()
+        top3 = ", ".join(f"{n} (RMS={d:.3f})" for n, d in ranked[:3])
+        print(f"  master_plot    best fit: {results.model_ranking.best_model}  [top-3: {top3}]")
+    if results.preexponential is not None:
+        pre = results.preexponential
+        print(
+            f"  preexponential under f(α)={pre.model_name}: "
+            f"log10 A = {pre.log10_A_median:.2f} ± {pre.log10_A_mad:.2f}  "
+            f"(A ≈ {pre.A_per_sec_median:.3e} 1/s)"
+        )
+    if results.multistep is not None:
+        ms = results.multistep
+        print(
+            f"  multistep      n={ms.n_steps} step(s), "
+            f"E_a flatness {ms.flatness_score*100:.1f}%"
+        )
+        for s in ms.steps:
+            print(
+                f"    step {s.index}: α∈[{s.alpha_lo:.2f}, {s.alpha_hi:.2f}], "
+                f"E = {s.Ea_kJ_per_mol_median:.1f} ± {s.Ea_kJ_per_mol_mad:.1f} kJ/mol, "
+                f"contribution {s.contribution*100:.0f}%"
+            )
     print(f"Outputs written to: {out_dir.resolve()}")
     return 0
 
