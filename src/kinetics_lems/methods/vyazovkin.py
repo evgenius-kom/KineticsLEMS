@@ -13,9 +13,10 @@ Two flavors:
       p(x)     =  exp(-x) / x · (x² + 10x + 18) / (x³ + 12x² + 36x + 24)   (Senum–Yang).
 
 * :func:`vyazovkin_aic` — advanced isoconversional (Vyazovkin 2001), evaluates
-  the integral numerically over a small window α ∈ [α − Δα, α + Δα] using the
-  actual T(t) of each run. Works for arbitrary heating programs and is more
-  robust to E(α) variability.
+  the integral numerically over a small window α ∈ [α − Δα, α + Δα]. More
+  robust to E(α) variability than the classical method. The current
+  implementation reconstructs t from T assuming linear heating; for arbitrary
+  T(t) one would need to pass the recorded t directly.
 """
 from __future__ import annotations
 
@@ -38,11 +39,24 @@ def _minimize_bounded(phi: Callable[[float], float], bounds_J: tuple[float, floa
 # ---------- Senum–Yang p(x) approximation ----------
 # Accurate to better than 1e-5 for x > 20, which covers any realistic
 # E_a / (R·T) in thermal-analysis kinetics (typically 20–100).
+# Works on scalars or numpy arrays.
 
-def _p_senum_yang(x: float) -> float:
+def _p_senum_yang(x):
     num = x * x + 10.0 * x + 18.0
     den = x * x * x + 12.0 * x * x + 36.0 * x + 24.0
-    return float(np.exp(-x) / x * num / den)
+    return np.exp(-x) / x * num / den
+
+
+def _phi_off_diagonal_sum(numerators: np.ndarray, denominators: np.ndarray) -> float:
+    """Compute Σ_{i≠j} numerators[i] / denominators[j] for two 1-D vectors of equal length.
+
+    Used by both Vyazovkin variants: classical takes p(x)·β_j as numerator and
+    p(x)·β_i as denominator (collapsing into ratios of scaled p(x)); AIC takes
+    J_i and J_j directly.
+    """
+    ratios = numerators[:, None] / denominators[None, :]
+    np.fill_diagonal(ratios, 0.0)
+    return float(ratios.sum())
 
 
 # ---------- Classical Vyazovkin (linear heating only) ----------
@@ -74,23 +88,14 @@ def _minimize_phi_classical(
     betas_per_sec: np.ndarray,
     Ea_bracket_kJ: tuple[float, float],
 ) -> float:
-    n = T_alpha.size
-
     def phi(E_J: float) -> float:
-        # I(E, T) under linear heating ≈ (E / (R·β)) · p(x); the β cancels naturally
-        # in the ratio below, so we keep it explicit per the docx formulation:
-        # term = I_i · β_j  /  (I_j · β_i)  with I_k = (E/R) · p(x_k).
-        x = E_J / (R_GAS * T_alpha)
         # The (E/R) prefactor of I(E, T_α) = (E/R)·p(x) cancels in every
         # numerator/denominator pair, so we work with p(x) directly.
-        p = np.array([_p_senum_yang(xi) for xi in x])
-        total = 0.0
-        for i in range(n):
-            for j in range(n):
-                if i == j:
-                    continue
-                total += (p[i] * betas_per_sec[j]) / (p[j] * betas_per_sec[i])
-        return total
+        # Per-pair term:  (p_i · β_j) / (p_j · β_i)
+        #              = (p_i / β_i) / (p_j / β_j).
+        x = E_J / (R_GAS * T_alpha)
+        p = _p_senum_yang(x)
+        return _phi_off_diagonal_sum(p / betas_per_sec, p / betas_per_sec)
 
     bounds = (Ea_bracket_kJ[0] * 1000.0, Ea_bracket_kJ[1] * 1000.0)
     return _minimize_bounded(phi, bounds)
@@ -120,7 +125,11 @@ def vyazovkin_aic(
 
     then minimize  Φ(E) = Σ_{i ≠ j} J_i / J_j.
 
-    No assumption of linear heating: each run's true T(t) is used.
+    Note: this implementation reconstructs ``t = (T − T₀) / β`` from the
+    recorded T grid and the supplied heating rate, so it currently assumes
+    linear heating. To support arbitrary T(t) (modulated DSC, isothermal
+    jumps), pass the recorded ``t`` and ``T(t)`` directly — see
+    :func:`_to_aic_run`.
     """
     if len(runs) < 2:
         raise ValueError("Vyazovkin AIC needs at least 2 runs")
@@ -176,8 +185,6 @@ def _minimize_phi_aic(
     windows: list[tuple[np.ndarray, np.ndarray]],
     Ea_bracket_kJ: tuple[float, float],
 ) -> float:
-    n = len(windows)
-
     def J(E_J: float, t_grid: np.ndarray, T_grid: np.ndarray) -> float:
         return float(np.trapezoid(np.exp(-E_J / (R_GAS * T_grid)), t_grid))
 
@@ -185,13 +192,7 @@ def _minimize_phi_aic(
         Js = np.array([J(E_J, *w) for w in windows])
         # Numerical floor — windows can shrink to ~0 for nearly degenerate runs.
         Js = np.maximum(Js, 1e-300)
-        total = 0.0
-        for i in range(n):
-            for j in range(n):
-                if i == j:
-                    continue
-                total += Js[i] / Js[j]
-        return total
+        return _phi_off_diagonal_sum(Js, Js)
 
     bounds = (Ea_bracket_kJ[0] * 1000.0, Ea_bracket_kJ[1] * 1000.0)
     return _minimize_bounded(phi, bounds)

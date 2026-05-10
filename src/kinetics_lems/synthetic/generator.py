@@ -70,7 +70,7 @@ def generate_case(
     rng = np.random.default_rng(seed)
 
     auto_start, auto_stop = _auto_temperature_window(
-        Ea_J_per_mol, A_per_sec, max(rates_K_per_min)
+        Ea_J_per_mol, A_per_sec, min(rates_K_per_min)
     )
     T_start_eff = float(T_start) if T_start is not None else auto_start
     T_stop_eff = float(T_stop) if T_stop is not None else auto_stop
@@ -114,26 +114,25 @@ def generate_case(
 def _auto_temperature_window(
     Ea_J_per_mol: float,
     A_per_sec: float,
-    beta_max_K_per_min: float,
+    beta_min_K_per_min: float,
 ) -> tuple[float, float]:
     """Pick a T window where the rate at the edges is negligible.
 
-    Solves k(T) = A · exp(-E/RT) = k_target for the lower / upper edge,
-    using a small target rate at T_start and a large one at T_stop.
+    Picks T_start so that dα/dT = (A/β)·exp(-E/RT) ≪ 1 even at the *slowest*
+    heating rate (β_min) — which is the worst case, since lower β makes
+    dα/dT larger at any given T. T_stop is set well above the peak so the
+    reaction completes inside the window.
     """
-    # Edge rates chosen so that at T_start the per-K rate (k/β) ≪ 1 and at
-    # T_stop the reaction is fully consumed.
-    k_low = 1e-6  # 1/s
-    k_high = 1e2  # 1/s
-    beta_max_per_sec = beta_max_K_per_min / SEC_PER_MIN
+    k_low = 1e-6  # target k(T_start) = k_low · β_min  →  dα/dT ≈ k_low at T_start
+    k_high = 1e2  # 1/s; reaction effectively over above this
+    beta_min_per_sec = beta_min_K_per_min / SEC_PER_MIN
 
     def T_for_rate(k: float) -> float:
         return Ea_J_per_mol / (R_GAS * np.log(A_per_sec / k))
 
-    # Conservative lower bound: ensure dα/dT = (A/β)·exp(-E/RT) ≪ 1 at start.
-    T_start = T_for_rate(k_low * beta_max_per_sec / 1.0)
+    T_start = T_for_rate(k_low * beta_min_per_sec)
     T_stop = T_for_rate(k_high)
-    # Add 10% margins.
+    # Small symmetric margin.
     span = T_stop - T_start
     return float(T_start - 0.05 * span), float(T_stop + 0.05 * span)
 
