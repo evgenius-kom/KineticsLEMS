@@ -19,8 +19,17 @@ class ConversionConfig:
     max: float = 0.95
 
     def grid(self) -> np.ndarray:
-        if not (0.0 < self.min < self.max < 1.0):
-            raise ValueError(f"Bad α range: min={self.min}, max={self.max}")
+        """Return an evenly-spaced α grid on [min, max].
+
+        ``step`` controls the *count* of points: ``n ≈ (max − min) / step + 1``,
+        rounded to the nearest integer. The actual spacing
+        ``(max − min) / (n − 1)`` may differ slightly when ``(max − min)``
+        is not an integer multiple of ``step``.
+        """
+        if not 0.0 < self.min < self.max < 1.0:
+            raise ValueError(
+                f"Bad α range: need 0 < min < max < 1, got min={self.min}, max={self.max}"
+            )
         if self.step <= 0:
             raise ValueError(f"Bad α step: {self.step}")
         n = int(round((self.max - self.min) / self.step)) + 1

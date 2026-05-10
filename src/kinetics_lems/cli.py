@@ -5,6 +5,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import numpy as np
+
 from .config import DEFAULT_CONFIG_PATH, load_config
 from .io import load_case
 from .reporting import plot_ea_vs_alpha, plot_kissinger, write_csv
@@ -108,8 +110,6 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
 
 def _nanmean(arr) -> float:
-    import numpy as np
-
     arr = np.asarray(arr)
     valid = ~np.isnan(arr)
     return float(np.mean(arr[valid])) if valid.any() else float("nan")

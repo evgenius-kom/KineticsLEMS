@@ -45,11 +45,23 @@ are turned into α(T):
    data and matches the protocol described in the local algorithms note.
 2. **Cumulative integration.** I(T) = ∫_{T_start}^{T} y(T') dT' (trapezoid).
 3. **Normalization.** α(T) = I(T) / I(T_end).
-4. **dα/dt.** Under linear heating, dα/dt = (y / I(T_end)) · (β/60).
+4. **dα/dt.** Under linear heating, dα/dt = (y / I(T_end)) · β (with β in K/s).
 5. **Sampling at fixed α.** For a user-supplied conversion grid {α_k}, look up
    T_α and (dα/dt)_α by linear interpolation on the monotone branch of α(T).
 
 Implementation: [`conversion.py`](../src/kinetics_lems/conversion.py).
+
+**Why the formula in step 4 is unit-agnostic.** The same
+``dα/dt = (y / total) · β`` works whether the input ``y`` is
+
+* raw DSC heat flow Q̇ (mW): ``∫y dT = β · ΔH``, so ``y/total · β = y/ΔH``;
+* dα/dT (already normalized per K): ``∫y dT = 1``, so ``y/total · β = y · β``;
+* dα/dt directly: ``∫y dT = β``, so ``y/total · β = y``.
+
+In every case the proportionality constant cancels in the ratio
+``y / total``, leaving the correct rate. So you don't need to know the
+absolute calibration of your DSC heat flow, only that ``y`` is proportional
+to the reaction rate.
 
 ---
 
