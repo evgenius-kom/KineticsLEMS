@@ -19,12 +19,10 @@ The shared format conventions every adapter resolves into:
   :func:`kinetics_lems.conversion._build_run` for why absolute calibration
   doesn't matter for isoconversional analysis)
 
-TODO (cross-cutting):
-    - Replace dict-based metadata with the pydantic schemas in
-      :mod:`kinetics_lems.schemas` once that module is promoted out of
-      stub status.
-    - Add ``--vendor <name>`` flag to the CLI for explicit dispatch.
-    - Add ``sniff(path)`` heuristics so the CLI can auto-detect vendor.
+See ``docs/TODO_FEATURES.md`` item 6 ("Implement at least one real
+vendor adapter") for the prioritised plan; cross-cutting work
+(CLI ``--vendor`` flag, schema migration, ``sniff(path)`` heuristics)
+is tracked there too.
 """
 from __future__ import annotations
 

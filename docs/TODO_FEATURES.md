@@ -1,41 +1,17 @@
 # Roadmap — future kinetics features
 
 Forward-looking list of features beyond the current core. Items shipped
-in code are now documented in [docs/ALGORITHMS.md](ALGORITHMS.md) and the
-top-level README; this file tracks **what's next** and **why each
-deferred item is non-trivial**.
+in code are documented in [docs/ALGORITHMS.md](ALGORITHMS.md); this file
+tracks **what's next** and **why each deferred item is non-trivial**.
 
 Status legend:
-- ✅ SHIPPED — implemented; cross-link to file/test
 - ★ HIGH PRIORITY — strong user value, recommended next
 - ◐ MEDIUM PRIORITY — useful but specialized
 - ○ LOW PRIORITY — nice-to-have / niche
 
 ---
 
-## ✅ Recently shipped (2026-05)
-
-| Item | Where |
-|---|---|
-| ICTAC pairwise consistency check (`consistency_check`) | [methods/consistency.py](../src/kinetics_lems/methods/consistency.py), tests: [test_consistency.py](../tests/test_consistency.py) |
-| Savitzky–Golay smoothing option for Friedman | [methods/friedman.py](../src/kinetics_lems/methods/friedman.py), [test_friedman_smoothing.py](../tests/test_friedman_smoothing.py) |
-| Endpoint / single-step reliability warnings | [methods/diagnostics.py](../src/kinetics_lems/methods/diagnostics.py), [test_endpoint_diagnostics.py](../tests/test_endpoint_diagnostics.py) |
-| AIC / BIC for Coats–Redfern + multistep | [methods/coats_redfern.py](../src/kinetics_lems/methods/coats_redfern.py), [methods/multistep.py](../src/kinetics_lems/methods/multistep.py), [test_aic_bic.py](../tests/test_aic_bic.py) |
-| Compensation effect ln A vs E | [methods/compensation.py](../src/kinetics_lems/methods/compensation.py), [test_compensation.py](../tests/test_compensation.py) |
-| 3-column (t, T, y) wave reader — arbitrary T(t) | [io/wave_reader.py](../src/kinetics_lems/io/wave_reader.py), [conversion.py](../src/kinetics_lems/conversion.py), [test_three_column_wave.py](../tests/test_three_column_wave.py) |
-| Sestak–Berggren and Prout–Tompkins empirical fits | [methods/empirical_models.py](../src/kinetics_lems/methods/empirical_models.py), [test_empirical_models.py](../tests/test_empirical_models.py) |
-| Model-free isothermal prediction (Vyazovkin 2000) | [methods/prediction_modelfree.py](../src/kinetics_lems/methods/prediction_modelfree.py), [test_prediction_extensions.py](../tests/test_prediction_extensions.py) |
-| Triplet-based α(t) prediction under arbitrary T(t) | `predict_under_program` in [methods/lifetime.py](../src/kinetics_lems/methods/lifetime.py) |
-| Markdown report generator | [reporting_markdown.py](../src/kinetics_lems/reporting_markdown.py), [test_markdown_report.py](../tests/test_markdown_report.py) |
-| Multi-step / DAEM / arbitrary-T(t) synthetic datasets | [synthetic/multistep.py](../src/kinetics_lems/synthetic/multistep.py), [test_synthetic_multistep.py](../tests/test_synthetic_multistep.py) |
-| Vendor input adapter scaffold (NETZSCH / TA TRIOS / Mettler / AKTS / PerkinElmer / Shimadzu) | [io/vendors/](../src/kinetics_lems/io/vendors/), [test_vendor_adapters.py](../tests/test_vendor_adapters.py) |
-| Canonical pydantic schemas (infrastructure) | [schemas/canonical.py](../src/kinetics_lems/schemas/canonical.py), [test_schemas.py](../tests/test_schemas.py) |
-| Model-based fitting scaffold (infrastructure) | [fitting/](../src/kinetics_lems/fitting/), [test_fitting_scaffold.py](../tests/test_fitting_scaffold.py) |
-| ML predictor plugin contract (infrastructure) | [ml/](../src/kinetics_lems/ml/), [test_ml_plugin.py](../tests/test_ml_plugin.py) |
-
----
-
-## ★ HIGH PRIORITY — next round
+## ★ HIGH PRIORITY
 
 ### 1. Implement the model-based global fitter (`fitting/`)
 
@@ -55,7 +31,7 @@ least_squares` driver are missing.
    the module docstring).
 3. Optimizer adapter using `scipy.optimize.differential_evolution → least_squares`.
 4. PARALLEL after the 2-parallel synthetic dataset
-   (already added: [synthetic/multistep.py](../src/kinetics_lems/synthetic/multistep.py)).
+   (already available: [synthetic/multistep.py](../src/kinetics_lems/synthetic/multistep.py)).
 
 **Effort.** ≈ 600–800 LOC + 6–10 new tests.
 
@@ -65,8 +41,9 @@ synthetic to within 2–5%.
 ### 2. DAEM (Gaussian + discrete-grid)
 
 **Why.** Distributed reactivity is the right model for biomass /
-heterogeneous polymers / kerogens. We already generate Gaussian-DAEM
-synthetic data; the fit side is missing.
+heterogeneous polymers / kerogens. Gaussian-DAEM synthetic data is
+already shipped in [synthetic/multistep.py](../src/kinetics_lems/synthetic/multistep.py);
+the fit side is missing.
 
 **Scope.**
 
@@ -77,7 +54,7 @@ synthetic data; the fit side is missing.
 **Effort.** ≈ 250 LOC + 4 tests, ``scipy.optimize.nnls`` for discrete,
 ``scipy.optimize.least_squares`` for Gaussian.
 
-**Validation.** Recover ``(Ē, σ)`` for [synthetic/multistep.py](../src/kinetics_lems/synthetic/multistep.py) ``generate_daem_gaussian_case``.
+**Validation.** Recover ``(Ē, σ)`` for `generate_daem_gaussian_case`.
 
 ### 3. Hold-out / leave-one-rate-out validation
 
@@ -106,12 +83,13 @@ mechanistic.
 Migrate I/O boundaries (vendor adapters → `CaseData` → schema) to the
 pydantic types in [schemas/canonical.py](../src/kinetics_lems/schemas/canonical.py).
 This unlocks JSON-stable export of every artefact (fit results, model
-specifications) and aligns with the §5 of `kinetics_research_implementation_notes.md`.
+specifications) and aligns with §5 of
+`kinetics_research_implementation_notes.md`.
 
 ### 6. Implement at least one real vendor adapter
 
 Pick whichever lab format actually arrives most often (NETZSCH Proteus
-ASCII is the strongest candidate for our use case). The scaffold in
+ASCII is the strongest candidate). The scaffold in
 [io/vendors/](../src/kinetics_lems/io/vendors/) makes this drop-in:
 only `load()` needs to be filled.
 
