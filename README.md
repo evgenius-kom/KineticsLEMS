@@ -5,11 +5,11 @@ Given a set of experiments at different heating rates, compute the activation
 energy E_a as a function of conversion α using the canonical model-free
 methods.
 
-Implemented methods (13):
+Implemented methods:
 
 | Method            | Type          | What it gives             |
 |-------------------|---------------|---------------------------|
-| Friedman          | differential  | E_a(α)                    |
+| Friedman          | differential, optional Savitzky–Golay | E_a(α)             |
 | Kissinger–Akahira–Sunose (KAS) | integral, linearized   | E_a(α) |
 | Ozawa–Flynn–Wall (OFW)         | integral, Doyle approx | E_a(α) |
 | Kissinger (classical)          | peak-temperature       | single E_a |
@@ -17,11 +17,18 @@ Implemented methods (13):
 | Vyazovkin AIC (2001)           | nonlinear integral, numerical  | E_a(α) (linear heating; see [docs/ALGORITHMS.md](docs/ALGORITHMS.md) §G) |
 | Z(α) master plot  | model discrimination | best-fit reaction model + RMS ranking |
 | Pre-exponential A | kinetic triplet | A(α) median/MAD, auto-picks f(α) from Z-plot |
-| Multi-step        | E(α) segmentation | step boundaries, per-step E_a, flatness score |
+| Multi-step        | E(α) segmentation | step boundaries, per-step E_a, AIC/BIC, flatness score |
 | Reaction order n  | F_n linearization | best n + E_a, R²(n) sweep |
-| Coats–Redfern     | per-rate model-fit | E_a + A for every g(α), independent ranking |
+| Coats–Redfern     | per-rate model-fit | E_a + A + AIC/BIC for every g(α), independent ranking |
+| Sestak–Berggren / Prout–Tompkins | empirical Z(α) fit | (m, n[, p]) + R² (opt-in) |
 | Jackknife uncertainty | leave-one-run-out | mean E(α) ± 95% CI |
-| Predictive lifetime | isothermal integration | α(t) and time-to-α at user temperatures |
+| ICTAC consistency check | cross-method pair audit | pairwise ΔE/E + warnings (default threshold 10%) |
+| Endpoint diagnostics  | per-method reliability | low/high-α tail flags + single-step flatness check |
+| Compensation effect   | ln A vs E linearity | (slope, intercept, R²) — identifiability flag |
+| Predictive lifetime   | isothermal integration | α(t) and time-to-α at user temperatures |
+| Model-free isothermal prediction | Vyazovkin 2000 | t(α) at T_iso without picking f(α) |
+| α(t) under arbitrary T(t) | triplet integrator | predict modulated-DSC / cure / storage profiles |
+| Markdown report   | one-file summary | embeds every CSV/PNG + warnings + diagnostics |
 
 Math, derivations, and implementation choices are documented in
 [docs/ALGORITHMS.md](docs/ALGORITHMS.md).
@@ -112,9 +119,14 @@ Notes:
 - `Method` is one of `DSC`, `TGA`, `FSC`, `POM`. The current analysis pipeline
   treats them all as scalar y(T); peak interpretation differs but the math
   does not.
-- Each wave file is plain text, two columns separated by spaces / tabs:
-  `T (K)<TAB>y` per line. Comma decimals (`316,5`) are tolerated. Lines that
-  don't parse are silently skipped.
+- Each wave file is plain text, **two or three** columns separated by
+  spaces / tabs:
+  - **2-column** `T (K)<TAB>y` per line — legacy linear-heating format.
+  - **3-column** `t (s)<TAB>T (K)<TAB>y` — arbitrary T(t) program
+    (modulated DSC, T-jump, fast-cycling FSC). The recorded `t` is used
+    end-to-end instead of the linear-heating assumption.
+  Comma decimals (`316,5`) are tolerated. Lines that don't parse are
+  silently skipped.
 
 A complete worked example lives in [`examples/synthetic/F1_120kJ/`](examples/synthetic/F1_120kJ/).
 
@@ -247,35 +259,43 @@ Repo layout:
 src/kinetics_lems/
   __init__.py
   constants.py              # R, Doyle factor, unit conversions
-  models.py                 # Wave, CaseData, CaseParams, enums
+  models.py                 # Wave (2-/3-column), CaseData, CaseParams, enums
   config.py                 # TOML loading and validation
-  conversion.py             # baseline subtraction, α(T), T(α), dα/dt(α)
+  conversion.py             # baseline, α(T), T(α), dα/dt(α); 2-/3-column paths
   plotting.py               # paper_style() context manager, save_figure()
   runner.py                 # orchestration: case + config -> AnalysisResults
-  reporting.py              # Ea vs α CSV + PNG/PDF output
-  reporting_master_plot.py  # Z(α) CSV + plot
-  reporting_preexp.py       # A(α) CSV + plot
-  reporting_multistep.py    # multi-step CSV + plot
-  reporting_reaction_order.py
-  reporting_coats_redfern.py
-  reporting_uncertainty.py
-  reporting_lifetime.py
+  reporting*.py             # CSV + plot exports per method (one file per concern)
+  reporting_markdown.py     # single self-contained Markdown report
+  reporting_compensation.py # ln A vs E identifiability plot
+  reporting_consistency.py  # ICTAC pairwise agreement table
   cli.py                    # `kinetics-lems` entry point
   io/                       # case + wave file readers (folder or .zip)
+    vendors/                # vendor-specific adapter scaffold + stubs
+                            # (NETZSCH / TA TRIOS / Mettler / AKTS / PE / Shimadzu)
+  schemas/                  # canonical pydantic schemas (infrastructure)
+  fitting/                  # model-based global fitter scaffold (infrastructure)
+  ml/                       # ML predictor plugin contract (infrastructure)
   methods/
-    friedman.py             # differential isoconversional
+    friedman.py             # differential isoconversional + optional SavGol
     kas.py                  # KAS integral isoconversional
     ofw.py                  # OFW (Doyle approx)
     kissinger.py            # peak-temperature method
     vyazovkin.py            # classical + AIC nonlinear integral
     master_plot.py          # Criado–Málek Z(α), 12-model ranking
+    empirical_models.py     # Sestak-Berggren and Prout-Tompkins Z(α) fits
     preexponential.py       # A from kinetic triplet, log-space median/MAD
-    multistep.py            # greedy E(α) segmentation, flatness score
+    multistep.py            # greedy E(α) segmentation, flatness score, AIC/BIC
     reaction_order.py       # F_n linearization sweep over n
-    coats_redfern.py        # per-rate model-fit baseline
+    coats_redfern.py        # per-rate model-fit baseline + AIC/BIC
     uncertainty.py          # jackknife-by-run E(α) confidence intervals
-    lifetime.py             # predictive isothermal α(t) and time-to-α
+    lifetime.py             # isothermal α(t) + arbitrary T(t) prediction
+    prediction_modelfree.py # Vyazovkin 2000 t(α; T) without f(α)
+    consistency.py          # ICTAC pairwise E(α) agreement check
+    compensation.py         # ln A vs E identifiability diagnostic
+    diagnostics.py          # endpoint reliability + single-step flatness
   synthetic/                # ground-truth data generator
+    generator.py            # single-step (F1/F2/A2/R3/…)
+    multistep.py            # 2-parallel + Gaussian DAEM + modulated-T(t)
 configs/default.toml
 docs/                       # ALGORITHMS, validation, roadmap, future-feature specs
 data/reference_workbooks/   # real-material α(T) fixtures (ABPOT, DAPOT, Epoxy, SKM)

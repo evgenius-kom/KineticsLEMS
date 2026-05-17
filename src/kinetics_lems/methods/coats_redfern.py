@@ -37,6 +37,10 @@ class CoatsRedfernRunFit:
     A_per_sec: float          # extracted from the intercept assuming linear heating
     r_squared: float
     n_points: int
+    aic: float = float("nan")
+    """Akaike information criterion of the linear fit (k=2 parameters)."""
+    bic: float = float("nan")
+    """Bayesian information criterion of the linear fit (k=2 parameters)."""
 
 
 @dataclass(frozen=True)
@@ -50,6 +54,10 @@ class CoatsRedfernModelSummary:
     log10_A_std: float
     r_squared_mean: float
     """Mean R² across runs — higher = better fit of this model."""
+
+    aic_mean: float
+    """Mean AIC across runs — lower = better fit *per fixed model complexity*."""
+    bic_mean: float
 
     n_runs: int
 
@@ -127,13 +135,18 @@ def coats_redfern(
                 continue
             # intercept ≈ ln(A·R / (β·E))  →  A = β·E·exp(intercept) / R
             A = beta_K_per_sec * Ea_J * np.exp(intercept) / R_GAS
+            n_pts = int(finite.sum())
+            residuals = y[finite] - (slope * inv_T[finite] + intercept)
+            aic, bic = _aic_bic_ols(residuals, k=2)
             fit = CoatsRedfernRunFit(
                 model=name,
                 rate_K_per_min=run.rate_K_per_min,
                 Ea_kJ_per_mol=Ea_J / 1000.0,
                 A_per_sec=float(A),
                 r_squared=r2,
-                n_points=int(finite.sum()),
+                n_points=n_pts,
+                aic=aic,
+                bic=bic,
             )
             fits.append(fit)
             by_model[name].append(fit)
@@ -145,6 +158,8 @@ def coats_redfern(
         Eas = np.array([f.Ea_kJ_per_mol for f in fits_for_model])
         As = np.array([f.A_per_sec for f in fits_for_model])
         r2s = np.array([f.r_squared for f in fits_for_model])
+        aics = np.array([f.aic for f in fits_for_model])
+        bics = np.array([f.bic for f in fits_for_model])
         with np.errstate(divide="ignore", invalid="ignore"):
             log_As = np.log10(np.where(As > 0, As, np.nan))
         summaries.append(
@@ -155,6 +170,8 @@ def coats_redfern(
                 log10_A_mean=float(np.nanmean(log_As)),
                 log10_A_std=float(np.nanstd(log_As, ddof=0)),
                 r_squared_mean=float(np.mean(r2s)),
+                aic_mean=float(np.nanmean(aics)),
+                bic_mean=float(np.nanmean(bics)),
                 n_runs=len(fits_for_model),
             )
         )
@@ -164,6 +181,33 @@ def coats_redfern(
 
     summaries.sort(key=lambda s: s.r_squared_mean, reverse=True)
     return CoatsRedfernResult(fits=fits, summaries=summaries)
+
+
+def _aic_bic_ols(residuals: np.ndarray, *, k: int) -> tuple[float, float]:
+    """AIC/BIC for an ordinary-least-squares fit.
+
+    Under Gaussian residuals the maximised log-likelihood reduces to
+    ``-n/2 · ln(RSS/n) - const`` (Burnham & Anderson, *Model Selection
+    and Multimodel Inference*, 2002, §2.2):
+
+        AIC = n · ln(RSS / n) + 2 · k
+        BIC = n · ln(RSS / n) + k · ln(n)
+
+    The additive constant ``n · (1 + ln(2π))`` is the same for every
+    model on the same data and is dropped — only AIC *differences* are
+    meaningful anyway.
+    """
+    n = residuals.size
+    if n <= k:
+        return float("nan"), float("nan")
+    rss = float(np.sum(residuals * residuals))
+    if rss <= 0:
+        # Perfect fit (synthetic / degenerate) — AIC → −∞, return finite floor.
+        rss = 1e-300
+    log_rss_over_n = float(np.log(rss / n))
+    aic = n * log_rss_over_n + 2.0 * k
+    bic = n * log_rss_over_n + k * float(np.log(n))
+    return aic, bic
 
 
 __all__ = [

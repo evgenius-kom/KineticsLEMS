@@ -46,6 +46,14 @@ class MultiStepResult:
     > 0.20 → clear multi-step.
     """
 
+    aic_piecewise_constant: float = float("nan")
+    """AIC of the piecewise-constant approximation of E(α) by ``n_steps``
+    segments. Each segment contributes one free parameter (the segment
+    median), so ``k = n_steps``. Useful only as a *relative* score —
+    compare AIC of 1- vs 2- vs 3-step fits on the same E(α)."""
+
+    bic_piecewise_constant: float = float("nan")
+
 
 def detect_steps(
     iso: IsoconversionalResult,
@@ -123,7 +131,39 @@ def detect_steps(
             )
         )
 
-    return MultiStepResult(n_steps=len(steps), steps=steps, flatness_score=flatness)
+    # Piecewise-constant AIC/BIC: residual = E(α) - segment_median.
+    residuals: list[float] = []
+    for k in range(len(boundaries) - 1):
+        lo, hi = boundaries[k], boundaries[k + 1]
+        residuals.extend((Ea[lo:hi] - np.median(Ea[lo:hi])).tolist())
+    res_arr = np.array(residuals, dtype=float)
+    aic, bic = _aic_bic_piecewise(res_arr, k=len(steps))
+
+    return MultiStepResult(
+        n_steps=len(steps),
+        steps=steps,
+        flatness_score=flatness,
+        aic_piecewise_constant=aic,
+        bic_piecewise_constant=bic,
+    )
+
+
+def _aic_bic_piecewise(residuals: np.ndarray, *, k: int) -> tuple[float, float]:
+    """AIC/BIC of a piecewise-constant approximation, Gaussian noise.
+
+    Mirrors :func:`coats_redfern._aic_bic_ols`; defined locally here to keep
+    multistep.py free of cross-method imports.
+    """
+    n = residuals.size
+    if n <= k:
+        return float("nan"), float("nan")
+    rss = float(np.sum(residuals * residuals))
+    if rss <= 0:
+        rss = 1e-300
+    log_rss_over_n = float(np.log(rss / n))
+    aic = n * log_rss_over_n + 2.0 * k
+    bic = n * log_rss_over_n + k * float(np.log(n))
+    return aic, bic
 
 
 __all__ = ["KineticStep", "MultiStepResult", "detect_steps"]

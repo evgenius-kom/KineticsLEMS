@@ -16,8 +16,17 @@ enabled = [
     "friedman", "kas", "ofw", "kissinger",
     "vyazovkin", "vyazovkin_aic",
     "master_plot", "preexponential", "multistep",
-    "reaction_order", "coats_redfern", "uncertainty", "lifetime",
+    "reaction_order", "coats_redfern", "uncertainty",
+    "consistency", "compensation", "lifetime",
 ]
+
+[methods.friedman]
+# Differentiation amplifies noise on DSC/TGA traces. Setting smooth_window
+# applies a Savitzky-Golay filter to dα/dt before the linear regression,
+# improving Friedman robustness on noisy data. Disabled by default for
+# reproducibility with prior results. Window must be odd, >= smooth_poly+2.
+# smooth_window = 11
+# smooth_poly   = 3
 
 [methods.preexponential]
 # f(α) model name (e.g. "F1", "F2", "A2", "R3"). Leave blank to auto-pick
@@ -52,6 +61,22 @@ alpha_max = 0.9
 # intervals. Needs ≥ 3 heating rates to produce a non-NaN SE.
 method = "vyazovkin"
 
+[methods.consistency]
+# ICTAC 2020 §3.2 cross-method agreement check. Pairs whose worst-case
+# |ΔE| / max(|E|) over the shared α grid exceed ``threshold`` raise a
+# warning. 0.10 = 10% is the ICTAC rough threshold; 0.05 is reasonable
+# for high-quality data, 0.20 for noisy/limited-β datasets.
+threshold = 0.10
+
+[methods.empirical_models]
+# Optional empirical Z(α) fits. These models are non-identifiable
+# (especially Sestak-Berggren — many (m, n, p) match Z(α) equally well)
+# so leave them OFF unless the 12 canonical models give a clearly bad
+# match. The fits report RMS distance + R² so they slot into the same
+# ranking shown for Coats-Redfern and master_plot.
+enable_prout_tompkins  = false  # f(α) = α^m (1−α)^n
+enable_sestak_berggren = false  # f(α) = α^m (1−α)^n [−ln(1−α)]^p
+
 [methods.lifetime]
 # Predictive isothermal α(t) at several storage / operating temperatures.
 # Uses the kinetic triplet (E_a(α) from Vyazovkin, A from preexponential,
@@ -78,3 +103,4 @@ save_csv          = true
 plot_dpi          = 300                  # paper-grade by default
 plot_formats      = ["png", "pdf"]       # add "svg" for inline LaTeX/Web figures
 per_method_panels = false                # extra one-figure-per-method outputs
+write_markdown_report = true             # single self-contained report.md

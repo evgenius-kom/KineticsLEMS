@@ -18,6 +18,8 @@ def write_multistep_csv(result: MultiStepResult, output_dir: Path) -> Path:
         w = csv.writer(f)
         w.writerow([f"# n_steps = {result.n_steps}"])
         w.writerow([f"# flatness_score = {result.flatness_score:.4f}"])
+        w.writerow([f"# aic_piecewise_constant = {result.aic_piecewise_constant:.4f}"])
+        w.writerow([f"# bic_piecewise_constant = {result.bic_piecewise_constant:.4f}"])
         w.writerow([])
         w.writerow([
             "step", "alpha_lo", "alpha_hi", "Ea_kJ_per_mol_median",

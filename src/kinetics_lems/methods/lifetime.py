@@ -212,10 +212,78 @@ def predict_at_temperatures(
     )
 
 
+def predict_under_program(
+    *,
+    time_s: np.ndarray,
+    T_K: np.ndarray,
+    Ea_J_per_mol: np.ndarray,
+    alpha_grid: np.ndarray,
+    A_per_sec: float,
+    model: str | ReactionModel = "F1",
+    alpha_start: float = 0.0,
+) -> LifetimePrediction:
+    """Triplet-based α(t) prediction under an arbitrary T(t) program.
+
+    Integrates ``dα/dt = A · f(α) · exp(−E(α)/RT(t))`` forward in time
+    along the supplied ``(time_s, T_K)`` profile via cumulative trapezoid.
+    Returns a :class:`LifetimePrediction` with ``T_K = NaN`` (non-isothermal)
+    and ``alpha``/``time_sec`` populated for every grid point in ``time_s``.
+
+    Unlike :func:`predict_alpha_of_t`, this works for storage profiles with
+    diurnal/seasonal temperature variation, T-jump cure cycles, or any
+    other recorded T(t). E(α) is interpolated linearly off ``alpha_grid``.
+
+    Parameters
+    ----------
+    time_s, T_K :
+        T(t) program, both 1-D arrays of equal length. Must start at
+        ``time_s[0]`` ≈ 0 (the moment the reaction begins).
+    """
+    if time_s.shape != T_K.shape:
+        raise ValueError("time_s and T_K must share shape")
+    if not np.all(np.diff(time_s) > 0):
+        raise ValueError("time_s must be strictly increasing")
+    # np.interp clips outside ``alpha_grid``, so E(α<alpha_grid[0]) becomes
+    # ``Ea[0]`` — fine when alpha_start sits below the grid's lower edge.
+
+    if isinstance(model, str):
+        if model not in MASTER_MODELS:
+            raise ValueError(f"Unknown model '{model}'. Allowed: {sorted(MASTER_MODELS)}")
+        rm = MASTER_MODELS[model]
+        model_name = model
+    else:
+        rm = model
+        model_name = model.name
+
+    # Integrate dα/dt forward in time using an explicit midpoint rule.
+    n = time_s.size
+    alpha = np.empty(n, dtype=float)
+    alpha[0] = alpha_start
+    for k in range(1, n):
+        a_k = alpha[k - 1]
+        # Interpolate E(α) at current α.
+        E_cur = float(np.interp(a_k, alpha_grid, Ea_J_per_mol))
+        T_mid = 0.5 * (T_K[k - 1] + T_K[k])
+        dt = float(time_s[k] - time_s[k - 1])
+        f_alpha = float(rm.f(np.array([a_k]))[0])
+        rate = A_per_sec * max(f_alpha, 0.0) * np.exp(-E_cur / (R_GAS * T_mid))
+        a_new = a_k + rate * dt
+        alpha[k] = min(max(a_new, 0.0), 1.0)
+
+    return LifetimePrediction(
+        T_K=float("nan"),  # arbitrary program — no single isothermal T
+        alpha=alpha,
+        time_sec=time_s.copy(),
+        model_name=model_name,
+        A_per_sec=float(A_per_sec),
+    )
+
+
 __all__ = [
     "LifetimePrediction",
     "LifetimeSummary",
     "predict_alpha_of_t",
     "predict_at_temperatures",
+    "predict_under_program",
     "time_to_conversion",
 ]

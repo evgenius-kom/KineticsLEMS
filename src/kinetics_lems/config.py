@@ -23,6 +23,8 @@ ALL_METHODS = (
     "coats_redfern",
     "uncertainty",
     "lifetime",
+    "consistency",
+    "compensation",
 )
 
 
@@ -48,6 +50,17 @@ class ConversionConfig:
             raise ValueError(f"Bad α step: {self.step}")
         n = int(round((self.max - self.min) / self.step)) + 1
         return np.linspace(self.min, self.max, n)
+
+
+@dataclass(frozen=True)
+class FriedmanConfig:
+    smooth_window: int | None = None
+    """Savitzky-Golay window applied to dα/dt before linear regression.
+
+    Must be odd and ≥ ``smooth_poly + 2``. ``None`` (default) disables
+    smoothing for backwards compatibility.
+    """
+    smooth_poly: int = 3
 
 
 @dataclass(frozen=True)
@@ -100,6 +113,22 @@ class UncertaintyConfig:
 
 
 @dataclass(frozen=True)
+class ConsistencyConfig:
+    threshold: float = 0.10
+    """Relative ΔE/E above which a method-pair is reported as inconsistent."""
+
+
+@dataclass(frozen=True)
+class EmpiricalModelsConfig:
+    enable_prout_tompkins: bool = False
+    enable_sestak_berggren: bool = False
+    """If ``True``, after the canonical 12-model Z(α) ranking the empirical
+    f(α) model is fitted by least squares and its (m, n[, p]) added to the
+    output. Off by default — these models are non-identifiable and should
+    be opt-in (ICTAC 2020 §4.5)."""
+
+
+@dataclass(frozen=True)
 class LifetimeConfig:
     temperatures_C: tuple[float, ...] = (25.0, 40.0, 60.0)
     """Isothermal temperatures (°C) for α(t) prediction."""
@@ -122,12 +151,16 @@ class OutputConfig:
     """Vector formats first (pdf/svg) for journals; png for screen previews."""
     per_method_panels: bool = False
     """If True, also write one figure per method in addition to the overlay."""
+    write_markdown_report: bool = True
+    """Write a single self-contained Markdown report (``report.md``) that
+    cross-references every CSV/PNG. Disable for headless test runs."""
 
 
 @dataclass(frozen=True)
 class Config:
     conversion: ConversionConfig = field(default_factory=ConversionConfig)
     enabled_methods: tuple[str, ...] = ALL_METHODS
+    friedman: FriedmanConfig = field(default_factory=FriedmanConfig)
     vyazovkin: VyazovkinConfig = field(default_factory=VyazovkinConfig)
     vyazovkin_aic: VyazovkinAICConfig = field(default_factory=VyazovkinAICConfig)
     preexponential: PreexponentialConfig = field(default_factory=PreexponentialConfig)
@@ -135,6 +168,8 @@ class Config:
     reaction_order: ReactionOrderConfig = field(default_factory=ReactionOrderConfig)
     coats_redfern: CoatsRedfernConfig = field(default_factory=CoatsRedfernConfig)
     uncertainty: UncertaintyConfig = field(default_factory=UncertaintyConfig)
+    consistency: ConsistencyConfig = field(default_factory=ConsistencyConfig)
+    empirical_models: EmpiricalModelsConfig = field(default_factory=EmpiricalModelsConfig)
     lifetime: LifetimeConfig = field(default_factory=LifetimeConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
 
@@ -161,6 +196,13 @@ def _parse(raw: dict) -> Config:
     for m in enabled:
         if m not in ALL_METHODS:
             raise ValueError(f"Unknown method '{m}'. Allowed: {ALL_METHODS}")
+
+    fr_raw = methods_raw.get("friedman", {})
+    fr_window = fr_raw.get("smooth_window")
+    friedman = FriedmanConfig(
+        smooth_window=int(fr_window) if fr_window else None,
+        smooth_poly=int(fr_raw.get("smooth_poly", 3)),
+    )
 
     vya_raw = methods_raw.get("vyazovkin", {})
     vya = VyazovkinConfig(ea_bracket_kJ=_pair(vya_raw.get("ea_bracket_kJ", (1.0, 600.0))))
@@ -206,6 +248,17 @@ def _parse(raw: dict) -> Config:
         method=str(unc_raw.get("method", "vyazovkin")),
     )
 
+    consistency_raw = methods_raw.get("consistency", {})
+    consistency = ConsistencyConfig(
+        threshold=float(consistency_raw.get("threshold", 0.10)),
+    )
+
+    emp_raw = methods_raw.get("empirical_models", {})
+    empirical_models = EmpiricalModelsConfig(
+        enable_prout_tompkins=bool(emp_raw.get("enable_prout_tompkins", False)),
+        enable_sestak_berggren=bool(emp_raw.get("enable_sestak_berggren", False)),
+    )
+
     lt_raw = methods_raw.get("lifetime", {})
     raw_lt_model = lt_raw.get("model")
     lifetime = LifetimeConfig(
@@ -226,11 +279,13 @@ def _parse(raw: dict) -> Config:
         plot_dpi=int(out_raw.get("plot_dpi", 300)),
         plot_formats=tuple(out_raw.get("plot_formats", ("png", "pdf"))),
         per_method_panels=bool(out_raw.get("per_method_panels", False)),
+        write_markdown_report=bool(out_raw.get("write_markdown_report", True)),
     )
 
     return Config(
         conversion=conversion,
         enabled_methods=enabled,
+        friedman=friedman,
         vyazovkin=vya,
         vyazovkin_aic=aic,
         preexponential=preexp,
@@ -238,6 +293,8 @@ def _parse(raw: dict) -> Config:
         reaction_order=reaction_order,
         coats_redfern=coats_redfern,
         uncertainty=uncertainty,
+        consistency=consistency,
+        empirical_models=empirical_models,
         lifetime=lifetime,
         output=output,
     )
@@ -252,8 +309,11 @@ __all__ = [
     "ALL_METHODS",
     "CoatsRedfernConfig",
     "Config",
+    "ConsistencyConfig",
     "ConversionConfig",
     "DEFAULT_CONFIG_PATH",
+    "EmpiricalModelsConfig",
+    "FriedmanConfig",
     "LifetimeConfig",
     "MultiStepConfig",
     "OutputConfig",

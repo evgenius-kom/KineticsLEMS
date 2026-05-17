@@ -22,7 +22,7 @@ def write_coats_redfern_csv(result: CoatsRedfernResult, output_dir: Path) -> lis
         w = csv.writer(f)
         w.writerow([
             "model", "rate_K_per_min", "Ea_kJ_per_mol",
-            "A_per_sec", "r_squared", "n_points",
+            "A_per_sec", "r_squared", "aic", "bic", "n_points",
         ])
         for fit in result.fits:
             w.writerow([
@@ -31,6 +31,8 @@ def write_coats_redfern_csv(result: CoatsRedfernResult, output_dir: Path) -> lis
                 f"{fit.Ea_kJ_per_mol:.4f}",
                 f"{fit.A_per_sec:.6e}",
                 f"{fit.r_squared:.6f}",
+                f"{fit.aic:.4f}",
+                f"{fit.bic:.4f}",
                 fit.n_points,
             ])
     written.append(fits_path)
@@ -40,7 +42,8 @@ def write_coats_redfern_csv(result: CoatsRedfernResult, output_dir: Path) -> lis
         w = csv.writer(f)
         w.writerow([
             "model", "Ea_kJ_per_mol_mean", "Ea_kJ_per_mol_std",
-            "log10_A_mean", "log10_A_std", "r_squared_mean", "n_runs",
+            "log10_A_mean", "log10_A_std", "r_squared_mean",
+            "aic_mean", "bic_mean", "n_runs",
         ])
         for s in result.summaries:
             w.writerow([
@@ -50,6 +53,8 @@ def write_coats_redfern_csv(result: CoatsRedfernResult, output_dir: Path) -> lis
                 f"{s.log10_A_mean:.4f}",
                 f"{s.log10_A_std:.4f}",
                 f"{s.r_squared_mean:.6f}",
+                f"{s.aic_mean:.4f}",
+                f"{s.bic_mean:.4f}",
                 s.n_runs,
             ])
     written.append(summary_path)
