@@ -1,9 +1,10 @@
 """Regression tests against ABPOT / DAPOT reference α(T) fixtures.
 
-The fixtures under ``tests/fixtures/{abpot,dapot}/`` contain (α, T) tables
-extracted from an independent Excel-based Vyazovkin workbook plus a
-per-α reference E_a column. We feed those tables into our integral
-methods and assert agreement within material-specific tolerances.
+The fixtures under ``data/reference_workbooks/{abpot,dapot}/`` contain
+(α, T) tables extracted from an independent Excel-based Vyazovkin
+workbook plus a per-α reference E_a column. We feed those tables into
+our integral methods and assert agreement within material-specific
+tolerances.
 
 Why integral methods only: the fixture is pre-processed α(T), not raw DSC.
 Differential methods (Friedman, Vyazovkin-AIC) need fine-grained dα/dt
@@ -21,7 +22,7 @@ from kinetics_lems.constants import SEC_PER_MIN
 from kinetics_lems.conversion import ConversionRun
 from kinetics_lems.methods import IsoconversionalResult, kas, ofw, vyazovkin
 
-FIXTURES = Path(__file__).resolve().parent / "fixtures"
+FIXTURES = Path(__file__).resolve().parents[1] / "data" / "reference_workbooks"
 
 
 def _load_run(folder: Path, beta_K_per_min: float) -> ConversionRun:
@@ -79,7 +80,7 @@ _CASES = [
     ),
     pytest.param(
         "dapot",
-        [2.5, 5.0, 10.0],
+        [1.0, 2.5, 5.0, 10.0],
         (0.10, 0.80),
         {
             "kas": (2.0, 5.0),

@@ -19,6 +19,10 @@ ALL_METHODS = (
     "master_plot",
     "preexponential",
     "multistep",
+    "reaction_order",
+    "coats_redfern",
+    "uncertainty",
+    "lifetime",
 )
 
 
@@ -73,6 +77,42 @@ class MultiStepConfig:
 
 
 @dataclass(frozen=True)
+class ReactionOrderConfig:
+    alpha_min: float = 0.1
+    alpha_max: float = 0.9
+    n_min: float = 0.1
+    n_max: float = 4.0
+    n_steps: int = 80
+
+
+@dataclass(frozen=True)
+class CoatsRedfernConfig:
+    alpha_min: float = 0.1
+    alpha_max: float = 0.9
+    models: tuple[str, ...] | None = None
+    """Restrict to a subset of master-plot models, or ``None`` for all 12."""
+
+
+@dataclass(frozen=True)
+class UncertaintyConfig:
+    method: str = "vyazovkin"
+    """Which isoconversional estimator to jackknife (vyazovkin / vyazovkin_aic / kas / friedman)."""
+
+
+@dataclass(frozen=True)
+class LifetimeConfig:
+    temperatures_C: tuple[float, ...] = (25.0, 40.0, 60.0)
+    """Isothermal temperatures (°C) for α(t) prediction."""
+
+    alpha_targets: tuple[float, ...] = (0.05, 0.10, 0.50, 0.90)
+    """α values at which to tabulate time-to-α."""
+
+    model: str | None = None
+    """Override f(α) for the prediction. ``None`` → use master-plot best model
+    (falls back to ``"F1"``)."""
+
+
+@dataclass(frozen=True)
 class OutputConfig:
     directory: str = "out"
     save_plots: bool = True
@@ -92,6 +132,10 @@ class Config:
     vyazovkin_aic: VyazovkinAICConfig = field(default_factory=VyazovkinAICConfig)
     preexponential: PreexponentialConfig = field(default_factory=PreexponentialConfig)
     multistep: MultiStepConfig = field(default_factory=MultiStepConfig)
+    reaction_order: ReactionOrderConfig = field(default_factory=ReactionOrderConfig)
+    coats_redfern: CoatsRedfernConfig = field(default_factory=CoatsRedfernConfig)
+    uncertainty: UncertaintyConfig = field(default_factory=UncertaintyConfig)
+    lifetime: LifetimeConfig = field(default_factory=LifetimeConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
 
 
@@ -140,6 +184,40 @@ def _parse(raw: dict) -> Config:
         min_segment_size=int(multistep_raw.get("min_segment_size", 3)),
     )
 
+    ro_raw = methods_raw.get("reaction_order", {})
+    reaction_order = ReactionOrderConfig(
+        alpha_min=float(ro_raw.get("alpha_min", 0.1)),
+        alpha_max=float(ro_raw.get("alpha_max", 0.9)),
+        n_min=float(ro_raw.get("n_min", 0.1)),
+        n_max=float(ro_raw.get("n_max", 4.0)),
+        n_steps=int(ro_raw.get("n_steps", 80)),
+    )
+
+    cr_raw = methods_raw.get("coats_redfern", {})
+    cr_models = cr_raw.get("models")
+    coats_redfern = CoatsRedfernConfig(
+        alpha_min=float(cr_raw.get("alpha_min", 0.1)),
+        alpha_max=float(cr_raw.get("alpha_max", 0.9)),
+        models=tuple(cr_models) if cr_models else None,
+    )
+
+    unc_raw = methods_raw.get("uncertainty", {})
+    uncertainty = UncertaintyConfig(
+        method=str(unc_raw.get("method", "vyazovkin")),
+    )
+
+    lt_raw = methods_raw.get("lifetime", {})
+    raw_lt_model = lt_raw.get("model")
+    lifetime = LifetimeConfig(
+        temperatures_C=tuple(
+            float(t) for t in lt_raw.get("temperatures_C", (25.0, 40.0, 60.0))
+        ),
+        alpha_targets=tuple(
+            float(a) for a in lt_raw.get("alpha_targets", (0.05, 0.10, 0.50, 0.90))
+        ),
+        model=raw_lt_model if raw_lt_model else None,
+    )
+
     out_raw = raw.get("output", {})
     output = OutputConfig(
         directory=str(out_raw.get("directory", "out")),
@@ -157,6 +235,10 @@ def _parse(raw: dict) -> Config:
         vyazovkin_aic=aic,
         preexponential=preexp,
         multistep=multistep,
+        reaction_order=reaction_order,
+        coats_redfern=coats_redfern,
+        uncertainty=uncertainty,
+        lifetime=lifetime,
         output=output,
     )
 
@@ -168,12 +250,16 @@ def _pair(value) -> tuple[float, float]:
 
 __all__ = [
     "ALL_METHODS",
+    "CoatsRedfernConfig",
     "Config",
     "ConversionConfig",
     "DEFAULT_CONFIG_PATH",
+    "LifetimeConfig",
     "MultiStepConfig",
     "OutputConfig",
     "PreexponentialConfig",
+    "ReactionOrderConfig",
+    "UncertaintyConfig",
     "VyazovkinAICConfig",
     "VyazovkinConfig",
     "load_config",

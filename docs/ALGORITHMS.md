@@ -218,17 +218,13 @@ Implementation: [`methods/vyazovkin.py::vyazovkin_aic`](../src/kinetics_lems/met
 
 ## H. Criado–Málek master plot — Z(α) model discrimination
 
-**Goal.** Identify f(α) by comparing the experimental Z(α) curve to the
-theoretical master curves of 12 standard models.
+**Goal.** Identify f(α) by comparing experimental Z(α) to 12 theoretical
+master curves.
 
-**Definition.**
+**Definition.** Z(α) = (dα/dt) · T² is proportional to f(α)·g(α) up to
+constants that cancel after normalization at α = 0.5:
 
-    Z(α) = (dα/dt) · T²                                               (13)
-
-This is proportional to f(α)·g(α) up to constants that cancel after
-normalization. After dividing by Z at α = 0.5:
-
-    Z_norm(α) = Z(α) / Z(0.5) = f(α)·g(α) / [f(0.5)·g(0.5)]         (14)
+    Z_norm(α) = Z(α) / Z(0.5) = f(α)·g(α) / [f(0.5)·g(0.5)]         (13)
 
 Every master curve and the experimental curve equal 1 at α = 0.5, making
 them directly comparable without knowing A, E_a, or β.
@@ -248,23 +244,17 @@ them directly comparable without knowing A, E_a, or β.
 | D1    | 1/(2α)                                     | α²                            |
 | D2    | [−ln(1 − α)]⁻¹                             | (1−α)ln(1−α) + α              |
 | D3    | 3(1−α)^(2/3) / (2[1−(1−α)^(1/3)])          | [1−(1−α)^(1/3)]²              |
-| D4    | 3 / (2[(1−α)^(−1/3) − 1])                  | 1 − ⅔α − (1−α)^(2/3)         |
+| D4    | 3 / (2[(1−α)^(−1/3) − 1])                  | 1 − ⅔α − (1−α)^(2/3)          |
 
-**Algorithm.**
+**Algorithm.** Average Z_k_norm across runs; compute the 12 master
+curves normalized at α = 0.5; rank by RMS distance over α
+(smaller = better fit).
 
-1. For each run k, evaluate Z_k(α) = (dα/dt)_α · T_α² at every α in the grid.
-2. Normalize: Z_k_norm(α) = Z_k(α) / Z_k(0.5).
-3. Average across runs: Z_exp(α) = mean_k Z_k_norm(α).
-4. Compute the 12 master curves and normalize each at α = 0.5.
-5. Rank by RMS distance: RMSD_m = sqrt(mean_α (Z_exp − Z_master_m)²).
-   Smaller RMSD → better fit.
-
-**Known degeneracy.** F1 and A_m (m = 2, 3, 4) have identical Z_norm
-shapes: Z = m·(1−α)·[−ln(1−α)] for A_m, which equals Z_F1 up to a
-constant prefactor that cancels after normalization. The Z-plot reliably
-separates model *families* (F_n vs R_n vs D_n vs A_m) but cannot
-distinguish F1 from A_m by itself. Combine with Friedman intercepts for
-that.
+**Known degeneracy.** F1 and A_m share identical Z_norm shapes
+(Z = m·(1−α)·[−ln(1−α)] for every A_m, equal to Z_F1 up to a constant
+prefactor that cancels after normalization). The Z-plot separates model
+*families* (F_n vs R_n vs D_n vs A_m) but cannot distinguish F1 from
+A_m by itself — combine with Friedman intercepts for that.
 
 Implementation: [`methods/master_plot.py`](../src/kinetics_lems/methods/master_plot.py).
 
@@ -332,6 +322,106 @@ Implementation: [`methods/multistep.py`](../src/kinetics_lems/methods/multistep.
 
 ---
 
+## K. Reaction-order n via linearization sweep
+
+**Goal.** For F_n kinetics — f(α) = (1 − α)ⁿ — directly recover n
+without committing to a single model in advance.
+
+**Linearization.** Starting from the Friedman form (6) and moving the
+β-dependent term to the LHS:
+
+    ln(dα/dT) + ln(β) − n · ln(1 − α)  =  ln A − E_a / (R·T)            (17)
+
+The (constant) ln A intercept no longer depends on β, so multiple
+heating rates can be **pooled** in the same regression. For the correct
+n, the LHS is linear in 1/T with slope −E_a/R.
+
+**Algorithm.**
+
+1. For each candidate n on a grid, build the LHS over all (α, run)
+   points in the working α window [α_min, α_max].
+2. Linear regression LHS vs 1/T; record R² and slope.
+3. Pick the n with maximum R²; report E_a = −slope · R, R²_best.
+
+**Caveat.** Only valid for the F_n family. Avrami, contracting-geometry,
+diffusion kinetics give biased n with R² < 1 — combine with the
+master-plot Z(α) ranking to confirm the model family first.
+
+Implementation: [`methods/reaction_order.py`](../src/kinetics_lems/methods/reaction_order.py).
+
+---
+
+## L. Coats–Redfern — single-rate model-fitting
+
+**Goal.** Cross-check the master-plot ranking with a different
+methodology. Coats–Redfern fits each model independently per heating
+rate; the master plot uses ratios across rates.
+
+**Linearization.** For each model g(α) and each rate β:
+
+    ln[g(α) / T²]  ≈  ln(A · R / (β · E))  −  E / (R · T)               (18)
+
+Linear in 1/T with slope −E/R and intercept ≈ ln(AR/(βE)).
+
+**Algorithm.**
+
+1. For every (model, run) pair, fit (18) over [α_min, α_max].
+2. Extract E from the slope; back out A from the intercept assuming
+   linear heating: A = β · E · exp(intercept) / R.
+3. Per model, average E and log10 A across runs; rank models by mean R².
+
+**Interpretation.** A good f(α) gives high R² *and* consistent E, A
+across heating rates (small std). Disagreement signals multi-step
+kinetics or a non-canonical model.
+
+Implementation: [`methods/coats_redfern.py`](../src/kinetics_lems/methods/coats_redfern.py).
+
+---
+
+## M. Confidence intervals via leave-one-run-out jackknife
+
+**Goal.** Quantify E(α) uncertainty — no closed-form covariance exists
+for isoconversional methods that pool across runs.
+
+**Formula** (Efron & Tibshirani 1993 §11, ICTAC 2011 §3). For n runs:
+
+    SE_jack(α) = sqrt[ (n − 1) / n · Σ_i (E_(i)(α) − E̅(α))² ]          (19)
+
+where E_(i)(α) is the estimator refit on the (n − 1)-run subset with
+run i removed, and E̅ is their mean. Report mean ± 1.96·SE for ~95 % CI.
+
+**Caveats.** Needs n ≥ 3 runs (with 2 every LOO subset has 1 run which
+isoconversional methods reject — SE reported as NaN). The jackknife SE
+underestimates true uncertainty for highly nonlinear estimators, but is
+order-of-magnitude correct for E_a methods.
+
+Implementation: [`methods/uncertainty.py`](../src/kinetics_lems/methods/uncertainty.py).
+
+---
+
+## N. Predictive isothermal kinetics — α(t) at fixed T
+
+**Goal.** Given the kinetic triplet (E_a(α), A, f(α)), predict α(t) at a
+user-chosen storage / operating temperature ("shelf life at 25 °C").
+
+**Method.** Equation (1) at constant T rearranges to
+
+    t(α)  =  ∫_{α_start}^{α}  dα' / [A · f(α') · exp(−E_a(α')/(R·T))]   (20)
+
+A single cumulative trapezoid over the α grid gives the full α → t map;
+linear interpolation yields time-to-α_target. Repeat at several T to
+tabulate the lifetime curve.
+
+**Caveats.** Prediction quality is bounded by (a) uncertainty in E_a(α)
+— quantify with §M; (b) correctness of f(α) — verify §H and §L agree;
+(c) extrapolation distance — predicting at 25 °C from 450 °C data
+extrapolates the Arrhenius factor over ~10 orders of magnitude.
+
+Reference: Vyazovkin (2000); ICTAC 2011 §7. Implementation:
+[`methods/lifetime.py`](../src/kinetics_lems/methods/lifetime.py).
+
+---
+
 ## Practical notes / pitfalls
 
 - **Units of β.** All formulae are derived for β in K/s. The CLI / settings
@@ -364,3 +454,7 @@ Implementation: [`methods/multistep.py`](../src/kinetics_lems/methods/multistep.
 - Criado, J. M. (1978). *Thermochim. Acta* 24, 186.
 - Criado, J. M. et al. (1989). *Thermochim. Acta* 147, 75.
 - Málek, J. (1992). *Thermochim. Acta* 200, 257.
+- Coats, A. W.; Redfern, J. P. (1964). *Nature* 201, 68.
+- Vyazovkin, S. (2000). *Thermochim. Acta* 355, 155 — model-free prediction.
+- Efron, B.; Tibshirani, R. J. (1993). *An Introduction to the Bootstrap.* Chapman & Hall.
+- ICTAC Kinetics Committee (2020). *Thermochim. Acta* 689, 178597 — updated recommendations.

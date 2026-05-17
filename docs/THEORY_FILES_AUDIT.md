@@ -13,18 +13,22 @@ These are safe to delete from `theory/`.
 
 ## XLSX / XLSM — safe to delete
 
+All four workbooks were re-extracted to TSV fixtures under
+[`data/reference_workbooks/`](../data/reference_workbooks/). Each material
+gets its own folder with a per-folder README describing the data and
+applicable tests; xlsx-internal computations land in
+[`data/reference_workbooks/xlsx_crosscheck/`](../data/reference_workbooks/xlsx_crosscheck/).
+
 | File                                        | What's in it                                                                    | Captured? |
 |---------------------------------------------|---------------------------------------------------------------------------------|-----------|
-| `Вязовкин.xlsx`                             | ABPOT and DAPOT α(T) tables + per-α reference E_a column (independent Vyazovkin computation) | ✅ Migrated to [`tests/fixtures/abpot/`](../tests/fixtures/abpot/) and [`tests/fixtures/dapot/`](../tests/fixtures/dapot/); regression-tested by [`tests/test_reference_abpot_dapot.py`](../tests/test_reference_abpot_dapot.py) |
-| `для расчета по Вязовкину.xlsm`             | Macro-driven workbook with multi-rate Vyazovkin computations: 3-rate / 4-rate ABPOT and DAPOT, plus prepreg-СКМ (6 rates)  | ✅ The 4th DAPOT rate (β = 1 K/min) extracted to [`tests/fixtures/dapot/rate_1.0.tsv`](../tests/fixtures/dapot/rate_1.0.tsv). СКМ noted in [`docs/TODO_FEATURES.md`](TODO_FEATURES.md#other-extra-data) — recoverable on demand. |
-| `Сводная таблица.xlsx`                      | DSC experiment log + Z(α)-master-plot computations (sheet "Z-plots") + per-α A calculation (sheet "A calculated") + reaction-order check (sheet "Проверка порядка") | ✅ Three derived analyses captured as concrete feature specs with formulas in [`docs/TODO_FEATURES.md`](TODO_FEATURES.md). Experimental log is not used by the codebase. |
-| `Zalfa plots Pr-Tm program.xlsm`            | Pr–Tm material's single-rate Z(α) computation                                   | ✅ Z(α) formula captured in [`docs/TODO_FEATURES.md`](TODO_FEATURES.md#1-criadomalek-master-plot--zα). Pr–Tm-specific data noted as recoverable on demand. |
+| `Вязовкин.xlsx`                             | ABPOT, DAPOT and Epoxy PV15-0,5 α(T) tables + per-α reference E_a columns (independent Vyazovkin computations) | ✅ Migrated to `data/reference_workbooks/{abpot,dapot,epoxy_pv15}/`; regression-tested by `tests/test_reference_{abpot_dapot,epoxy}.py` |
+| `для расчета по Вязовкину.xlsm`             | Macro-driven workbook with multi-rate Vyazovkin computations: 3-rate / 4-rate ABPOT and DAPOT, plus prepreg-СКМ (6 rates) | ✅ The 4th DAPOT rate (β = 1 K/min) and SKM 6-rate dataset extracted; SKM stress test in `tests/test_reference_skm.py` |
+| `Сводная таблица.xlsx`                      | DSC experiment log + Z(α) master-plot computations (sheet "Z-plots") + per-α A calculation (sheet "A calculated") + reaction-order check (sheet "Проверка порядка") | ✅ All three xlsx-formula outputs extracted to `data/reference_workbooks/xlsx_crosscheck/`; bit-for-bit verified by `tests/test_xlsx_crosscheck_*.py` |
+| `Zalfa plots Pr-Tm program.xlsm`            | Pr–Tm material's single-rate Z(α) computation                                   | ⚠️ Not extracted — Pr–Tm single-rate Z(α) is superseded by the cross-check Z-plot data extracted from `Сводная таблица.xlsx`. Re-extract only if Pr–Tm is needed as a separate test material (see TODO_FEATURES item 12). |
 
-**Recommendation.** Safe to delete all four. Everything algorithmically
-relevant (formulas, reference numbers) is captured in the codebase or
-under `docs/`. The remaining experimental-log content was never used by
-the codebase and can be reconstructed from primary lab notebooks if ever
-needed.
+The extraction is reproducible via
+[`scripts/extract_reference_fixtures.py`](../scripts/extract_reference_fixtures.py)
+if the xlsx files are restored under `theory/extra/`.
 
 ## Other files in `theory/` (PDFs and pptx)
 
@@ -36,7 +40,9 @@ Both can be deleted at your discretion.
 
 ## Bottom line
 
-- **Safe to delete:** all `.docx` and all `.xlsx` / `.xlsm` files.
-  The reference Vyazovkin numbers from ABPOT / DAPOT are preserved under
-  `tests/fixtures/` and exercised by `pytest`.
+- **Safe to delete:** all `.docx` and all `.xlsx` / `.xlsm` files
+  (including `theory/extra/` if present).  The reference Vyazovkin
+  numbers, xlsx Z(α)/A/n-order tables, and four reference materials
+  (ABPOT, DAPOT, Epoxy, SKM) are preserved under
+  `data/reference_workbooks/` and exercised by `pytest`.
 - **Optional / your call:** PDFs, pptx.

@@ -1,7 +1,7 @@
 # Cross-validation against ABPOT / DAPOT reference data
 
-The Vyazovkin xlsx (`theory/Вязовкин.xlsx`) contains α(T) tables for two
-real materials at multiple heating rates, plus a column of E_a(α) values
+The Vyazovkin xlsx (`theory/extra/Вязовкин.xlsx`) contains α(T) tables for
+two real materials at multiple heating rates, plus a column of E_a(α) values
 computed by an independent (Excel-based) Vyazovkin implementation. We use
 this as a regression check: feed the xlsx α(T) tables into our methods and
 compare against the reference E_a column.
@@ -11,10 +11,12 @@ Reproduce:
 - **Regression test (CI-runnable, no xlsx needed):** `pytest tests/test_reference_abpot_dapot.py`
 - **Full per-α dump (exploratory, needs the xlsx):** `.venv/bin/python scripts/validate_abpot_dapot.py`
 
-The regression test uses fixtures under [`tests/fixtures/abpot/`](../tests/fixtures/abpot/)
-and [`tests/fixtures/dapot/`](../tests/fixtures/dapot/), which were extracted
-once from the xlsx by [`scripts/extract_reference_fixtures.py`](../scripts/extract_reference_fixtures.py).
-The xlsx itself can now be deleted — see
+The regression test uses fixtures under
+[`data/reference_workbooks/abpot/`](../data/reference_workbooks/abpot/) and
+[`data/reference_workbooks/dapot/`](../data/reference_workbooks/dapot/), which
+were extracted from the xlsx by
+[`scripts/extract_reference_fixtures.py`](../scripts/extract_reference_fixtures.py).
+The xlsx itself can be deleted after extraction — see
 [THEORY_FILES_AUDIT.md](THEORY_FILES_AUDIT.md).
 
 ## Summary
@@ -28,7 +30,7 @@ The xlsx itself can now be deleted — see
 | Vyazovkin-AIC     |            29.63 |          92.27  |            18.02 |          80.04  |
 
 (All values in kJ/mol. ABPOT compared at 95 α-points, DAPOT at 96 α-points.
-Rates: ABPOT 0.2/1/2.5/5 K/min, DAPOT 2.5/5/10 K/min.)
+Rates: ABPOT 0.2/1/2.5/5 K/min, DAPOT 1/2.5/5/10 K/min.)
 
 ## Interpretation
 
@@ -82,6 +84,22 @@ methods rely on.
 
 ## Status
 
-Done — fixtures live under `tests/fixtures/{abpot,dapot}/` and the
+Done — fixtures live under `data/reference_workbooks/{abpot,dapot}/` and the
 regression check runs as part of the normal `pytest` suite. The xlsx is
 no longer required for CI / development.
+
+## Related fixtures
+
+The same reference-workbook directory hosts additional test materials and
+xlsx cross-check data extracted in the same pass:
+
+- [`data/reference_workbooks/epoxy_pv15/`](../data/reference_workbooks/epoxy_pv15/) —
+  Epoxy PV15-0,5 (3 rates + ref E_a, non-flat E(α));
+  see [`tests/test_reference_epoxy.py`](../tests/test_reference_epoxy.py).
+- [`data/reference_workbooks/skm_prepreg/`](../data/reference_workbooks/skm_prepreg/) —
+  SKM 6 rates (self-consistency stress test);
+  see [`tests/test_reference_skm.py`](../tests/test_reference_skm.py).
+- [`data/reference_workbooks/xlsx_crosscheck/`](../data/reference_workbooks/xlsx_crosscheck/) —
+  precomputed Z(α), A(α), reaction-order y(n) tables used by
+  `tests/test_xlsx_crosscheck_*.py` to verify our formula implementations
+  bit-for-bit against the original xlsx.

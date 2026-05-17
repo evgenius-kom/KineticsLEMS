@@ -43,3 +43,8 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
 ignore = ["E741"]  # We don't use ambiguous names; this is a fallback.
+
+[tool.ruff.lint.per-file-ignores]
+# Extraction utility holds embedded markdown README templates whose
+# table-row lines are intentionally long; not worth refactoring.
+"scripts/extract_reference_fixtures.py" = ["E501"]

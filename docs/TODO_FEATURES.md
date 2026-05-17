@@ -1,158 +1,163 @@
-# Features captured from Excel workbooks
+# Roadmap — future kinetics features
 
-These three features were extracted from `theory/Сводная таблица.xlsx`
-and `theory/Zalfa plots Pr-Tm program.xlsm`. All three are now implemented.
-The Excel files themselves can be deleted: the formulas, algorithm sketches,
-and references below preserve the full context.
+Forward-looking list of features beyond the current 13-method core.
+Items already shipped are documented in [docs/ALGORITHMS.md](ALGORITHMS.md)
+(sections H–N) and not repeated here. Priorities reflect value-to-user
+weighed against implementation cost.
 
-Cross-reference: [docs/ROADMAP_PROMPT.md](ROADMAP_PROMPT.md) section 3
-covers model-based features more broadly. The three items here are the
-specific Excel-derived ones that had a known formula and clear
-input/output.
-
----
-
-## 1. Criado–Málek master plot — Z(α) ✓ IMPLEMENTED
-
-**Module:** [`src/kinetics_lems/methods/master_plot.py`](../src/kinetics_lems/methods/master_plot.py)
-**Reporter:** [`src/kinetics_lems/reporting_master_plot.py`](../src/kinetics_lems/reporting_master_plot.py)
-**Tests:** [`tests/test_master_plot.py`](../tests/test_master_plot.py)
-
-Original spec (preserved for reference):
-
-## 1-spec. Criado–Málek master plot — Z(α)
-
-**Goal.** Identify the reaction-model function f(α) by comparing the
-experimental Z(α) curve against the master Z(α) curves of standard
-reaction models (F1, F2, A2, R2, R3, D1–D4, …).
-
-**Formula** (from `Сводная таблица.xlsx` sheet "Z-plots", verified
-against Criado et al. 1989 / Málek 1992):
-
-    Z(α) = (dα/dt) · T²
-
-Two normalizations are common:
-
-* Unnormalized: plot Z(α) vs α directly.
-* Normalized: divide by Z at α = 0.5 → curves of all models intersect at α = 0.5.
-
-`Сводная таблица.xlsx` row 3 formula was `=C3*B3^2/$H$3` — column C is
-dα/dt, B is T, $H$3 is the normalizing constant Z(α=0.5). Also implemented
-that way in `Zalfa plots Pr-Tm program.xlsm` as `=(C/$H$2)*(B/$G$2)^2`,
-which is the same thing rewritten with separate dα/dt and T² normalizers.
-
-**Master curves to compare against** (from Málek 1992):
-
-| Model | f(α)                        | g(α)                          | Z(α) = f·g            |
-|-------|-----------------------------|-------------------------------|-----------------------|
-| F1    | 1 − α                       | −ln(1 − α)                    | (1 − α)·[−ln(1 − α)]  |
-| F2    | (1 − α)²                    | (1 − α)⁻¹ − 1                 | (1 − α)·[1 − (1 − α)] |
-| A2    | 2(1 − α)·[−ln(1 − α)]^(1/2) | [−ln(1 − α)]^(1/2)            | …                     |
-| A3    | 3(1 − α)·[−ln(1 − α)]^(2/3) | [−ln(1 − α)]^(1/3)            | …                     |
-| R2    | 2·(1 − α)^(1/2)             | 1 − (1 − α)^(1/2)             | …                     |
-| R3    | 3·(1 − α)^(2/3)             | 1 − (1 − α)^(1/3)             | …                     |
-| D1    | 1/(2α)                      | α²                            | α / 2                 |
-| D2    | [−ln(1 − α)]⁻¹              | (1 − α)·ln(1 − α) + α         | …                     |
-| D3    | 3(1 − α)^(2/3) / (2·(1 − (1 − α)^(1/3))) | …               | …                     |
-
-**Implementation sketch (≈ 60 LOC, ≈ 1 hour):**
-
-1. Add `methods/master_plot.py` with `def z_alpha(run, alphas, normalize=True) -> np.ndarray`.
-2. Add `MASTER_CURVES: dict[str, callable]` returning Z(α) for each model.
-3. Add a `plot_master_zalpha` reporter that overlays the experimental Z(α)
-   from one run on top of the master curves.
-4. Pick the model whose master curve sits closest to experimental — print
-   ranking by mean abs distance.
-
-**References.** Criado, J. M. et al. *Thermochim. Acta* 147 (1989) 75. Málek, J.
-*Thermochim. Acta* 200 (1992) 257.
+Status legend:
+- ★ HIGH — strong user value, recommended next
+- ◐ MEDIUM — useful but specialized
+- ○ LOW — nice-to-have / niche
 
 ---
 
-## 2. Pre-exponential A from per-α E_a ✓ IMPLEMENTED
+## ★ HIGH PRIORITY
 
-**Module:** [`src/kinetics_lems/methods/preexponential.py`](../src/kinetics_lems/methods/preexponential.py)
-**Reporter:** [`src/kinetics_lems/reporting_preexp.py`](../src/kinetics_lems/reporting_preexp.py)
-**Tests:** [`tests/test_preexponential.py`](../tests/test_preexponential.py)
+### 1. Nonlinear T(t) support (modulated DSC / temperature jumps)
 
-Note: f(α) is no longer hard-coded to F1 — the runner auto-picks the
-best model from the master-plot ranking, or any model can be specified
-explicitly in the config (`[methods.preexponential] model = "F2"`).
+**Why.** AIC already handles non-linear heating mathematically, but the
+input pipeline assumes constant β. Modern thermal-analysis data
+(modulated DSC, T-jump, fast-cycling FSC) needs raw `(t, T)` samples.
 
-Original spec (preserved for reference):
+**Scope.**
 
-## 2-spec. Pre-exponential A from per-α E_a (assuming f(α) = 1 − α)
+1. Extend `settings.json` to allow a wave file with three columns
+   `t, T, y` instead of two-column `T, y`.
+2. Update [`io/wave_reader.py`](../src/kinetics_lems/io/) to autodetect
+   2- vs 3-column input.
+3. Update [`conversion.py`](../src/kinetics_lems/conversion.py): when t
+   is provided, compute dα/dt by numerical differentiation of α(t)
+   instead of `(y/total)·β`.
+4. Keep backwards compatibility: 2-column files still use the
+   linear-heating shortcut.
 
-**Goal.** Once Vyazovkin gives E_a(α), recover A under a chosen reaction
-model, then average across α and rates.
+**Effort.** ≈ 200 LOC + 3–5 new tests. Schema change in
+`settings.json` (additive, non-breaking).
 
-**Formula** (from `Сводная таблица.xlsx` sheet "A calculated", row 4
-formula `=C4 / ((1 − A4) · EXP(−D4·1000 / (8.314·B4)))`):
+### 2. Distributed Activation Energy Model (DAEM)
 
-    A(α) = (dα/dt)_α  /  [ f(α) · exp(−E_a(α) / (R·T_α)) ]
+**Why.** Standard for biomass pyrolysis, fossil fuels, complex polymers
+where activation energy is *continuously distributed* rather than from
+N discrete steps. Often gives much better fits than multi-step
+deconvolution in those domains.
 
-with f(α) = 1 − α (first-order assumption baked into the spreadsheet).
-`D4*1000` converts kJ/mol → J/mol because the Vyazovkin column is in kJ.
+**Scope.**
 
-**Implementation sketch (≈ 30 LOC, ≈ 30 min):**
+* Gaussian distribution of E around E̅ with stddev σ; fit (E̅, σ, A)
+  to the experimental dα/dt curves across all rates.
+* Nonlinear least squares (`scipy.optimize.least_squares`) on pooled
+  (T, dα/dt, β) data.
+* Report (E̅, σ, A, R²) and the implied f(α).
 
-1. After running Vyazovkin to get `Ea_J_per_mol[α]`, compute
-   `A_per_alpha[α, run] = (dα/dt)_α,run / (f(α) · exp(−E/(R·T_α,run)))`.
-2. Default f(α) is F1 (matches the spreadsheet); allow other models from
-   the master-plot module.
-3. Report median A across α and rates with an MAD-based dispersion.
+**Effort.** ≈ 250 LOC. Well-defined math; reference implementations
+exist in academic Python.
 
-**Caveat.** Bias depends entirely on the chosen f(α). Combine with the
-master-plot output above before quoting a number.
+**Reference.** Cai et al., *Renewable Sustainable Energy Rev.* 36 (2014) 236.
 
----
+### 3. ICTAC consistency check
 
-## 3. Reaction-order n via linearization — NOT YET IMPLEMENTED
+**Why.** ICTAC 2011/2020 recommend running ≥ 2 isoconversional methods
+and reporting agreement. The CLI prints them side-by-side but does not
+quantify divergence.
 
-This item was not implemented. The master-plot Z(α) ranking (item 1)
-already discriminates between model families (F_n, A_m, R_n, D_n), which
-is more general than sweeping n over a grid. If a strict n-order fit is
-needed, here is the original spec:
+**Scope.**
 
-## 3-spec. Reaction-order n via linearization
+* Compute pairwise relative differences between E_a(α) curves of every
+  pair of isoconversional methods.
+* If max-pair-diff > threshold (default 10 %), emit a structured warning
+  with the worst α and the methods involved.
+* Add `consistency.csv` and the warning to CLI stdout.
 
-**Goal.** Find n in f(α) = (1 − α)ⁿ by trying several values and picking
-the one that gives the straightest plot.
-
-**Formula** (from `Сводная таблица.xlsx` sheet "Проверка порядка"):
-
-    y(n; α, T) = ln(dα/dT) − n · ln(1 − α)
-    plot y vs 1/T  for each candidate n ∈ {0.7, 1, 2, 3, …}
-
-For the correct n this is linear with slope −E_a/R (exactly the Friedman
-form rewritten in T-domain). The spreadsheet hard-codes n ∈ {1, 2, 3, 0.7}.
-
-**Implementation sketch (≈ 25 LOC, ≈ 30 min):**
-
-1. For a single rate (or all rates pooled), sweep n over a grid (e.g.
-   0.5 → 3.0, step 0.1).
-2. For each n, fit a line to (1/T, ln(dα/dT) − n·ln(1 − α)) and record R².
-3. Return the n that maximizes R²; also report the slope (= −E_a/R) of
-   the best fit.
-
-**Caveat.** Only valid if the reaction is well-described by an n-th-order
-model. For Avrami / diffusion / contracting-geometry kinetics this gives
-biased n. Use master-plot ranking (item 1) first to confirm the model
-family before quoting n.
+**Effort.** ≈ 80 LOC + 2 tests. Pure post-processing.
 
 ---
 
-## Other extra data (not migrated, recoverable from xlsx if anyone needs)
+## ◐ MEDIUM PRIORITY
 
-The following auxiliary data was visible in the workbooks but was not
-turned into a fixture because the project doesn't currently need it:
+### 4. Sestak–Berggren empirical model
 
-* **СКМ (`прпепрег-СКМ`)** — preimpregnated polymer, 6 heating rates
-  (1, 2.5, 5, 10, 20, 40 K/min), α grid 0.005 → 0.995 step 0.01. No
-  reference E_a in the sheet. Useful as a 6-rate stress-test if
-  multi-rate robustness ever becomes an issue.
-* **Pr–Tm** (`Zalfa plots Pr-Tm program.xlsm`) — single-material Z(α)
-  computation; only useful as a worked example for item 1 above.
-* **`Сводная таблица.xlsx` sheet "Новая кинетика"** — newer ABPOT 2016
-  data with finer α grid. Possibly higher-quality replacement for the
-  current ABPOT fixture; would need re-extraction if re-used.
+**Why.** Three-parameter f(α) = α^m · (1−α)^n · [−ln(1−α)]^p that
+interpolates between F_n, A_m, R_n, D_n. Useful when none of the 12
+canonical models matches Z(α) well.
+
+**Scope.** Add to `MASTER_MODELS` as a parametric fit; expose (m, n, p)
+fitting via `scipy.optimize.curve_fit`. Allow toggle in
+`[methods.master_plot] use_sestak_berggren = true`.
+
+**Reference.** Šesták & Berggren, *Thermochim. Acta* 3 (1971) 1.
+
+### 5. Autocatalytic models (Prout–Tompkins, Kamal–Sourour)
+
+**Why.** Industry-standard for epoxy resin cure kinetics and other
+self-catalysed reactions where dα/dt ≠ 0 at α = 0.
+
+**Scope.** Add two new models:
+* Prout–Tompkins: f(α) = α^m · (1−α)^n.
+* Kamal–Sourour: dα/dt = (k₁ + k₂·α^m) · (1−α)^n  (two Arrhenius pairs).
+
+The second is a model-fitting target (not just an f(α)); needs its own
+solver since it has two competing reaction channels.
+
+**Effort.** ≈ 200 LOC + 4 tests.
+
+### 6. Coats–Redfern with explicit per-rate A reporting
+
+**Why.** Current Coats–Redfern aggregates A across runs. Some users want
+the per-rate A_i to assess Arrhenius compensation directly.
+
+**Scope.** Already 90 % there — `CoatsRedfernRunFit` carries per-run A;
+expose it through the CSV/plot more prominently.
+
+**Effort.** ≈ 20 LOC + 1 test.
+
+### 7. Savitzky–Golay smoothing for Friedman
+
+**Why.** Differentiation amplifies noise; SavGol smooths α(T) and dα/dt
+before linear regression, dramatically improving Friedman robustness on
+noisy DSC traces.
+
+**Scope.** Optional `[methods.friedman] smooth_window`, `smooth_poly`
+parameters. Pre-process `dalpha_dt` with `scipy.signal.savgol_filter`
+when enabled.
+
+**Effort.** ≈ 30 LOC + 2 tests.
+
+---
+
+## ○ LOW PRIORITY / NICE-TO-HAVE
+
+### 8. Compensation effect — ln A vs E plot
+
+Plotting ln A vs E_a across α (or across Coats–Redfern models) often
+reveals a linear "compensation" relationship. Diagnostic of whether a
+kinetic triplet is physically meaningful or just a fitting artefact.
+No new computation — just a new plot consumer of existing results.
+
+### 9. Model-free isothermal prediction (no f(α) assumption)
+
+Vyazovkin (2000) showed that `t(α; T_iso)` can be computed from E(α)
+without choosing f(α) explicitly, by using the ratio of temperature
+integrals. More robust than picking the wrong model in [`lifetime.py`](../src/kinetics_lems/methods/lifetime.py).
+Add as an alternate path that takes only E(α).
+
+### 10. LaTeX/BibTeX export
+
+Generate `report.tex` + `references.bib` from `AnalysisResults`
+containing every result table and method-specific citation. Targets
+academic users writing papers.
+
+### 11. ABPOT 2016 finer-grid replacement fixture
+
+`Сводная таблица.xlsx` sheet `Новая кинетика` contains newer ABPOT
+data with a denser α grid than the currently-extracted fixture.
+Worth re-extracting only if the current ABPOT regression test starts
+showing precision-limited failures — at present the existing
+[`data/reference_workbooks/abpot/`](../data/reference_workbooks/abpot/) data is adequate.
+
+### 12. Pr–Tm single-material Z(α) fixture
+
+`Zalfa plots Pr-Tm program.xlsm` contains single-material Z(α)
+calculations. Superseded by the cross-check fixtures already in
+[`data/reference_workbooks/xlsx_crosscheck/`](../data/reference_workbooks/xlsx_crosscheck/);
+only worth migrating if Pr-Tm is needed as a separate test material.

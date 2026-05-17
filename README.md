@@ -5,7 +5,7 @@ Given a set of experiments at different heating rates, compute the activation
 energy E_a as a function of conversion α using the canonical model-free
 methods.
 
-Implemented methods:
+Implemented methods (13):
 
 | Method            | Type          | What it gives             |
 |-------------------|---------------|---------------------------|
@@ -18,6 +18,10 @@ Implemented methods:
 | Z(α) master plot  | model discrimination | best-fit reaction model + RMS ranking |
 | Pre-exponential A | kinetic triplet | A(α) median/MAD, auto-picks f(α) from Z-plot |
 | Multi-step        | E(α) segmentation | step boundaries, per-step E_a, flatness score |
+| Reaction order n  | F_n linearization | best n + E_a, R²(n) sweep |
+| Coats–Redfern     | per-rate model-fit | E_a + A for every g(α), independent ranking |
+| Jackknife uncertainty | leave-one-run-out | mean E(α) ± 95% CI |
+| Predictive lifetime | isothermal integration | α(t) and time-to-α at user temperatures |
 
 Math, derivations, and implementation choices are documented in
 [docs/ALGORITHMS.md](docs/ALGORITHMS.md).
@@ -47,8 +51,6 @@ Sample output:
 
 ```
 Material: synthetic-F1
-Method:   DSC
-Type:     heating
 Rates:    [2.5, 5.0, 10.0, 20.0] K/min
   friedman       mean E_a =  120.00 kJ/mol
   kas            mean E_a =  119.74 kJ/mol
@@ -56,16 +58,21 @@ Rates:    [2.5, 5.0, 10.0, 20.0] K/min
   vyazovkin      mean E_a =  120.00 kJ/mol
   vyazovkin_aic  mean E_a =  120.00 kJ/mol
   kissinger      E_a =  119.73 kJ/mol (R²=1.0000)
-  master_plot    best model: F1  (RMS=0.0041)
-  preexponential median A = 9.97e+09 /s  (MAD=1.2e+08)
-  multistep      1 step(s), flatness=0.002 (single-step)
+  master_plot    best fit: A2  [top-3: A2 (RMS=0.001), F1 (RMS=0.001), A4 (RMS=0.001)]
+  preexponential under f(α)=A2: log10 A = 9.78 ± 0.15  (A ≈ 6.00e+09 1/s)
+  multistep      n=1 step(s), E_a flatness 0.0%
+  reaction_order best n = 0.99  (E_a = 119.5 kJ/mol, R² = 1.0000)
+  coats_redfern  best model: F1  [top-3: F1 (R²=1.000), A2 (R²=1.000), A3 (R²=1.000)]
+  uncertainty    vyazovkin jackknife: mean SE = 0.00 kJ/mol  (n_runs = 4)
+  lifetime       isothermal time-to-α (f(α) = A2):
+       T (°C)   t(α=0.05)   t(α=0.10)   t(α=0.50)   t(α=0.90)
+         25.0         0.0s     559.9y    3392.4y    7233.8y
+         60.0         0.0s       3.5y      21.0y      44.7y
 ```
 
-The output directory contains one CSV per method (E_a vs α with R²) plus
-PNG + PDF plots (300 DPI, Type-42 fonts): `Ea_vs_alpha` (overlay of all
-isoconversional methods), `kissinger` (linear fit), `master_plot_zalpha`
-(Z(α) overlay of experimental vs master curves), `preexponential_A`
-(A(α) profile), and `multistep_Ea` (E(α) with step boundaries).
+The output directory contains a CSV per method plus PNG + PDF plots
+(300 DPI, Type-42 fonts) for each visual artifact. See the **Output**
+section below for the complete file list.
 
 ## Input format
 
@@ -124,20 +131,41 @@ min  = 0.05
 max  = 0.95
 
 [methods]
-# Order matters: preexponential depends on vyazovkin + master_plot.
+# Order matters: preexponential depends on vyazovkin + master_plot;
+# lifetime depends on preexponential.
 enabled = [
     "friedman", "kas", "ofw", "kissinger",
     "vyazovkin", "vyazovkin_aic",
     "master_plot", "preexponential", "multistep",
+    "reaction_order", "coats_redfern", "uncertainty", "lifetime",
 ]
 
 [methods.preexponential]
-# Leave blank to auto-pick f(α) from master_plot; falls back to "F1".
-model = ""
+model = ""               # blank → auto-pick from master_plot
 
 [methods.multistep]
 jump_threshold   = 0.10
 min_segment_size = 3
+
+[methods.reaction_order]
+alpha_min = 0.1
+alpha_max = 0.9
+n_min     = 0.1
+n_max     = 4.0
+n_steps   = 80
+
+[methods.coats_redfern]
+alpha_min = 0.1
+alpha_max = 0.9
+# models = ["F1", "A2", "R3"]   # optional subset; default: all 12
+
+[methods.uncertainty]
+method = "vyazovkin"     # estimator to jackknife (needs ≥ 3 runs)
+
+[methods.lifetime]
+temperatures_C = [25.0, 40.0, 60.0]
+alpha_targets  = [0.05, 0.10, 0.50, 0.90]
+model          = ""      # blank → use master_plot best
 
 [methods.vyazovkin]
 ea_bracket_kJ = [1.0, 600.0]
@@ -150,9 +178,9 @@ ea_bracket_kJ = [1.0, 600.0]
 directory         = "out"
 save_plots        = true
 save_csv          = true
-plot_dpi          = 300           # paper-grade
+plot_dpi          = 300
 plot_formats      = ["png", "pdf"]
-per_method_panels = false         # extra one-figure-per-method outputs
+per_method_panels = false
 ```
 
 Override at runtime: `kinetics-lems analyze case/ --config my-config.toml`.
@@ -169,17 +197,25 @@ Per analysis run, in the output directory:
 |------|---------|
 | `friedman.csv`, `kas.csv`, `ofw.csv`, `vyazovkin.csv`, `vyazovkin_aic.csv` | `alpha`, `Ea_kJ_per_mol`, `intercept`, `r_squared` |
 | `kissinger.csv` | peak temperatures + fitted E_a, A |
-| `master_plot.csv` | model name, RMS distance (sorted best-first) |
-| `preexponential.csv` | `alpha`, `A_median_per_sec`, `A_mad_per_sec` |
-| `multistep.csv` | one row per detected step: `alpha_lo`, `alpha_hi`, `Ea_kJ_median`, `Ea_kJ_mad`, `contribution` |
+| `master_plot_z.csv`, `master_plot_ranking.csv` | wide Z(α) table + RMS ranking |
+| `preexponential.csv` | `alpha`, `A_median_per_sec` (+ summary header) |
+| `multistep.csv` | one row per detected step |
+| `reaction_order.csv` | `n`, `r_squared`, `Ea_kJ_per_mol` over the swept grid |
+| `coats_redfern_fits.csv`, `coats_redfern_ranking.csv` | per-(model, run) fit + mean R² ranking |
+| `uncertainty.csv` | `alpha`, `Ea_mean`, `Ea_se`, `Ea_ci95_low`, `Ea_ci95_high` |
+| `lifetime_times.csv`, `lifetime_curves.csv` | time-to-α table + full α(t) sweep per T |
 
 **Plots (PNG + PDF at 300 DPI, embedded Type-42 fonts):**
 
 - `Ea_vs_alpha` — overlay of E_a(α) for all isoconversional methods.
 - `kissinger` — linear fit on Kissinger coordinates.
-- `master_plot_zalpha` — experimental Z(α) vs master curves of all 12 models.
-- `preexponential_A` — A(α) profile with MAD error band.
-- `multistep_Ea` — E(α) from Vyazovkin with detected step boundaries.
+- `master_plot_z` — experimental Z(α) vs master curves.
+- `preexponential` — A(α) profile with MAD error band.
+- `multistep` — E(α) from Vyazovkin with detected step boundaries.
+- `reaction_order` — R²(n) and E_a(n) over the n sweep.
+- `coats_redfern` — bar chart of mean R² per model, ranked.
+- `uncertainty` — E(α) with shaded 95% jackknife CI.
+- `lifetime` — semilog α(t) curves, one per isothermal temperature.
 
 ## Generating synthetic data
 
@@ -220,6 +256,10 @@ src/kinetics_lems/
   reporting_master_plot.py  # Z(α) CSV + plot
   reporting_preexp.py       # A(α) CSV + plot
   reporting_multistep.py    # multi-step CSV + plot
+  reporting_reaction_order.py
+  reporting_coats_redfern.py
+  reporting_uncertainty.py
+  reporting_lifetime.py
   cli.py                    # `kinetics-lems` entry point
   io/                       # case + wave file readers (folder or .zip)
   methods/
@@ -231,11 +271,16 @@ src/kinetics_lems/
     master_plot.py          # Criado–Málek Z(α), 12-model ranking
     preexponential.py       # A from kinetic triplet, log-space median/MAD
     multistep.py            # greedy E(α) segmentation, flatness score
+    reaction_order.py       # F_n linearization sweep over n
+    coats_redfern.py        # per-rate model-fit baseline
+    uncertainty.py          # jackknife-by-run E(α) confidence intervals
+    lifetime.py             # predictive isothermal α(t) and time-to-α
   synthetic/                # ground-truth data generator
 configs/default.toml
 docs/                       # ALGORITHMS, validation, roadmap, future-feature specs
-tests/
-  fixtures/                 # ABPOT/DAPOT reference α(T) tables for regression tests
+data/reference_workbooks/   # real-material α(T) fixtures (ABPOT, DAPOT, Epoxy, SKM)
+                            # plus xlsx-formula cross-check tables
+tests/                      # unit + integration + cross-validation tests
 scripts/                    # one-off extraction + validation utilities
 examples/synthetic/         # generated by `kinetics-lems generate` (gitignored)
 ```

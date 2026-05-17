@@ -10,11 +10,13 @@ max  = 0.95
 
 [methods]
 # Which methods to run. Order matters: "preexponential" depends on
-# "vyazovkin" (or vyazovkin_aic / kas) and on "master_plot" (for f(α)).
+# "vyazovkin" + "master_plot"; "lifetime" depends on "preexponential";
+# "uncertainty" depends on its target method already being enabled.
 enabled = [
     "friedman", "kas", "ofw", "kissinger",
     "vyazovkin", "vyazovkin_aic",
     "master_plot", "preexponential", "multistep",
+    "reaction_order", "coats_redfern", "uncertainty", "lifetime",
 ]
 
 [methods.preexponential]
@@ -28,6 +30,35 @@ model = ""
 # than ``jump_threshold`` (relative). Min segment size in α-grid points.
 jump_threshold   = 0.10
 min_segment_size = 3
+
+[methods.reaction_order]
+# Sweep n in f(α) = (1−α)ⁿ on a linear grid; pick the value that gives
+# the highest pooled R² of the linearization.
+alpha_min = 0.1
+alpha_max = 0.9
+n_min     = 0.1
+n_max     = 4.0
+n_steps   = 80
+
+[methods.coats_redfern]
+# Per-rate model-fit baseline (E_a, A per model from ln(g(α)/T²) vs 1/T).
+alpha_min = 0.1
+alpha_max = 0.9
+# Leave models empty to evaluate all 12; or restrict, e.g.
+# models = ["F1", "A2", "R3"].
+
+[methods.uncertainty]
+# Which isoconversional method to jackknife-by-run for E(α) confidence
+# intervals. Needs ≥ 3 heating rates to produce a non-NaN SE.
+method = "vyazovkin"
+
+[methods.lifetime]
+# Predictive isothermal α(t) at several storage / operating temperatures.
+# Uses the kinetic triplet (E_a(α) from Vyazovkin, A from preexponential,
+# f(α) auto-picked from master_plot unless overridden below).
+temperatures_C = [25.0, 40.0, 60.0]
+alpha_targets  = [0.05, 0.10, 0.50, 0.90]
+model          = ""              # blank → use master_plot best
 
 [methods.vyazovkin]
 # Activation-energy search bracket (kJ/mol) for the 1D minimization of Φ(E).

@@ -10,9 +10,13 @@ import numpy as np
 from .config import DEFAULT_CONFIG_PATH, load_config
 from .io import load_case
 from .reporting import plot_ea_per_method, plot_ea_vs_alpha, plot_kissinger, write_csv
+from .reporting_coats_redfern import plot_coats_redfern, write_coats_redfern_csv
+from .reporting_lifetime import plot_lifetime, write_lifetime_csv
 from .reporting_master_plot import plot_master_plot, write_master_plot_csv
 from .reporting_multistep import plot_multistep, write_multistep_csv
 from .reporting_preexp import plot_preexp, write_preexp_csv
+from .reporting_reaction_order import plot_reaction_order, write_reaction_order_csv
+from .reporting_uncertainty import plot_uncertainty, write_uncertainty_csv
 from .runner import run_analysis
 from .synthetic import generate_case, write_case
 
@@ -82,6 +86,14 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
             write_preexp_csv(results.preexponential, out_dir)
         if results.multistep is not None:
             write_multistep_csv(results.multistep, out_dir)
+        if results.reaction_order is not None:
+            write_reaction_order_csv(results.reaction_order, out_dir)
+        if results.coats_redfern is not None:
+            write_coats_redfern_csv(results.coats_redfern, out_dir)
+        if results.uncertainty is not None:
+            write_uncertainty_csv(results.uncertainty, out_dir)
+        if results.lifetime is not None:
+            write_lifetime_csv(results.lifetime, out_dir)
     if config.output.save_plots:
         plot_kwargs = {
             "dpi": config.output.plot_dpi,
@@ -101,6 +113,14 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
             )
             if ms_iso is not None:
                 plot_multistep(ms_iso, results.multistep, out_dir, **plot_kwargs)
+        if results.reaction_order is not None:
+            plot_reaction_order(results.reaction_order, out_dir, **plot_kwargs)
+        if results.coats_redfern is not None:
+            plot_coats_redfern(results.coats_redfern, out_dir, **plot_kwargs)
+        if results.uncertainty is not None:
+            plot_uncertainty(results.uncertainty, out_dir, **plot_kwargs)
+        if results.lifetime is not None:
+            plot_lifetime(results.lifetime, out_dir, **plot_kwargs)
         if config.output.per_method_panels:
             plot_ea_per_method(results, out_dir, **plot_kwargs)
 
@@ -138,8 +158,60 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
                 f"E = {s.Ea_kJ_per_mol_median:.1f} ± {s.Ea_kJ_per_mol_mad:.1f} kJ/mol, "
                 f"contribution {s.contribution*100:.0f}%"
             )
+    if results.reaction_order is not None:
+        ro = results.reaction_order
+        print(
+            f"  reaction_order best n = {ro.n_best:.2f}  "
+            f"(E_a = {ro.Ea_best_kJ_per_mol:.1f} kJ/mol, R² = {ro.r_squared_best:.4f})"
+        )
+    if results.coats_redfern is not None:
+        cr = results.coats_redfern
+        top = cr.summaries[:3]
+        ranked = ", ".join(f"{s.model} (R²={s.r_squared_mean:.3f})" for s in top)
+        print(f"  coats_redfern  best model: {cr.best_model}  [top-3: {ranked}]")
+    if results.uncertainty is not None:
+        unc = results.uncertainty
+        finite = np.isfinite(unc.Ea_kJ_per_mol_se)
+        if finite.any():
+            se_mean = float(np.mean(unc.Ea_kJ_per_mol_se[finite]))
+            print(
+                f"  uncertainty    {unc.method} jackknife: "
+                f"mean SE = {se_mean:.2f} kJ/mol  (n_runs = {unc.n_runs})"
+            )
+        else:
+            print(
+                f"  uncertainty    jackknife unavailable "
+                f"(need ≥ 3 runs, got {unc.n_runs})"
+            )
+    if results.lifetime is not None:
+        lt = results.lifetime
+        print(f"  lifetime       isothermal time-to-α (f(α) = {lt.predictions[0].model_name}):")
+        header = "       T (°C)" + "".join(
+            f"   t(α={a:.2f})" for a in lt.alpha_targets
+        )
+        print(header)
+        for i, pred in enumerate(lt.predictions):
+            row = f"       {pred.T_K - 273.15:6.1f}"
+            for j in range(len(lt.alpha_targets)):
+                t = lt.times_at_targets[i, j]
+                row += f"   {_format_time(t):>10s}"
+            print(row)
     print(f"Outputs written to: {out_dir.resolve()}")
     return 0
+
+
+def _format_time(t: float) -> str:
+    if not np.isfinite(t):
+        return "—"
+    if t < 60.0:
+        return f"{t:.1f}s"
+    if t < 3600.0:
+        return f"{t / 60.0:.1f}m"
+    if t < 86400.0:
+        return f"{t / 3600.0:.1f}h"
+    if t < 365.25 * 86400.0:
+        return f"{t / 86400.0:.1f}d"
+    return f"{t / (365.25 * 86400.0):.1f}y"
 
 
 def _cmd_generate(args: argparse.Namespace) -> int:
